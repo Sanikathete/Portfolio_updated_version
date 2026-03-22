@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.12
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
@@ -28,12 +28,12 @@ jobs:
           python manage.py check
         env:
           SECRET_KEY: test-secret-key
-          DEBUG: True
+          DEBUG: "True"
           DB_NAME: test_db
           DB_USER: test_user
           DB_PASSWORD: test_pass
           DB_HOST: localhost
-          DB_PORT: 5432
+          DB_PORT: "5432"
           GROQ_API_KEY: test-key
 
   deploy:
