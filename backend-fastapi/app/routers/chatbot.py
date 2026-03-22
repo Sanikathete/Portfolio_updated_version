@@ -7,10 +7,19 @@ load_dotenv()
 
 router = APIRouter()
 
-DJANGO_CHATBOT_URL = "http://localhost:8000/api/chatbot/ask/"
+DJANGO_BASE_URL = "http://localhost:8000/api"
 
 # Simple in-memory MPin storage
 mpin_store = {}
+
+async def get_jwt_token(username: str, password: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{DJANGO_BASE_URL}/users/login/",
+            json={"username": username, "password": password}
+        )
+        data = response.json()
+        return data.get("access") or data.get("token")
 
 @router.post("/set-mpin")
 def set_mpin(username: str, mpin: str):
@@ -28,13 +37,22 @@ def verify_mpin(username: str, mpin: str):
     return {"message": "MPin verified!", "access": True}
 
 @router.post("/chat")
-async def chat(username: str, mpin: str, message: str):
+async def chat(username: str, password: str, mpin: str, message: str):
+    # Verify MPin first
     if username not in mpin_store or mpin_store[username] != mpin:
         raise HTTPException(status_code=401, detail="Invalid MPin - access denied")
+
+    # Get JWT token from Django
+    token = await get_jwt_token(username, password)
+    if not token:
+        raise HTTPException(status_code=401, detail="Could not authenticate with Django")
+
+    # Call Django chatbot with JWT token
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            DJANGO_CHATBOT_URL,
+            f"{DJANGO_BASE_URL}/chatbot/ask/",
             json={"question": message},
+            headers={"Authorization": f"Bearer {token}"},
             timeout=30.0
         )
     return {
@@ -44,13 +62,22 @@ async def chat(username: str, mpin: str, message: str):
     }
 
 @router.post("/voice-chat")
-async def voice_chat(username: str, mpin: str, voice_text: str):
+async def voice_chat(username: str, password: str, mpin: str, voice_text: str):
+    # Verify MPin first
     if username not in mpin_store or mpin_store[username] != mpin:
         raise HTTPException(status_code=401, detail="Invalid MPin - access denied")
+
+    # Get JWT token from Django
+    token = await get_jwt_token(username, password)
+    if not token:
+        raise HTTPException(status_code=401, detail="Could not authenticate with Django")
+
+    # Call Django chatbot with JWT token
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            DJANGO_CHATBOT_URL,
+            f"{DJANGO_BASE_URL}/chatbot/ask/",
             json={"question": voice_text},
+            headers={"Authorization": f"Bearer {token}"},
             timeout=30.0
         )
     return {

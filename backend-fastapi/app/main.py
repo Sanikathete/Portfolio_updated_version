@@ -5,6 +5,7 @@ from app.routers import news
 from app.routers import auth
 from app.routers import news_summary
 from app.routers import reports
+from app.routers import chatbot
 
 load_dotenv()
 
@@ -15,6 +16,7 @@ app.include_router(news.router, prefix="/news", tags=["News"])
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(news_summary.router, prefix="/news-summary", tags=["News Summary"])
 app.include_router(reports.router, prefix="/reports", tags=["Reports"])
+app.include_router(chatbot.router, prefix="/chatbot", tags=["Chatbot"])
 
 @app.get("/")
 def home():

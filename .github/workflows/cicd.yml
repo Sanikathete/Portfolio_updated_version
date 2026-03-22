@@ -1,0 +1,58 @@
+name: StockSphere CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+
+      - name: Install dependencies
+        run: |
+          cd backend-django
+          pip install -r requirements.txt
+
+      - name: Run Django checks
+        run: |
+          cd backend-django
+          python manage.py check
+        env:
+          SECRET_KEY: test-secret-key
+          DEBUG: True
+          DB_NAME: test_db
+          DB_USER: test_user
+          DB_PASSWORD: test_pass
+          DB_HOST: localhost
+          DB_PORT: 5432
+          GROQ_API_KEY: test-key
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == "refs/heads/main"
+    steps:
+      - name: Deploy to Azure VM
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          password: ${{ secrets.VM_PASSWORD }}
+          script: |
+            cd /home/azureuser/stocksphere
+            git pull origin main
+            cd backend-django
+            source venv/bin/activate
+            pip install -r requirements.txt
+            python manage.py migrate
+            sudo fuser -k 8000/tcp || true
+            nohup python manage.py runserver 0.0.0.0:8000 &
