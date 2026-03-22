@@ -1,10 +1,7 @@
-from django.shortcuts import render
-
-# Create your views here.
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions
-from .chatbot import get_stock_answer
+from .langgraph_agent import get_agent_answer
 
 class ChatbotView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -15,10 +12,11 @@ class ChatbotView(APIView):
             return Response({'error': 'Question is required'}, status=400)
         
         try:
-            answer = get_stock_answer(question)
+            result = get_agent_answer(question)
             return Response({
                 'question': question,
-                'answer': answer
+                'answer': result['answer'],
+                'agent_type': result['agent_type']
             })
         except Exception as e:
             return Response({'error': str(e)}, status=500)
