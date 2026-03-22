@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'portfolio',
     'watchlist',
     'django_celery_beat',
+     'chatbot',
 ]
 
 MIDDLEWARE = [
@@ -151,3 +152,5 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
+
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
