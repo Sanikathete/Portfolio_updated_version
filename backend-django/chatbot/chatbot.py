@@ -1,11 +1,11 @@
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 from django.conf import settings
 
 def get_stock_answer(question: str) -> str:
-    llm = ChatOpenAI(
-        model="gpt-3.5-turbo",
-        openai_api_key=settings.OPENAI_API_KEY,
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        groq_api_key=settings.GROQ_API_KEY,
         temperature=0.7
     )
     
