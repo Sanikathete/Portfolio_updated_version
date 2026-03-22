@@ -15,7 +15,7 @@ async def summarise_news(text: str, doc_id: str, source: str = ""):
     add_news(doc_id=doc_id, text=text, metadata={"source": source})
 
     response = client.chat.completions.create(
-        model="llama3-8b-8192",
+        model="llama-3.3-70b-versatile",
         messages=[
             {"role": "system", "content": "You are a financial news summariser. Summarise the following stock news in 2-3 sentences."},
             {"role": "user", "content": text}
@@ -39,7 +39,7 @@ async def search_and_summarise(query: str):
 
     combined = " ".join(documents)
     response = client.chat.completions.create(
-        model="llama3-8b-8192",
+        model="llama-3.3-70b-versatile",
         messages=[
             {"role": "system", "content": "You are a financial news summariser. Summarise these stock news articles in 3-4 sentences."},
             {"role": "user", "content": combined}
