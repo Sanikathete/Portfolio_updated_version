@@ -7,6 +7,7 @@ from app.routers import news_summary
 from app.routers import reports
 from app.routers import chatbot
 from app.routers import stocks
+from app.routers import load_stocks
 
 load_dotenv()
 
@@ -19,6 +20,7 @@ app.include_router(news_summary.router, prefix="/news-summary", tags=["News Summ
 app.include_router(reports.router, prefix="/reports", tags=["Reports"])
 app.include_router(chatbot.router, prefix="/chatbot", tags=["Chatbot"])
 app.include_router(stocks.router, prefix="/data", tags=["Stocks & Portfolio"])
+app.include_router(load_stocks.router, prefix="/chromadb", tags=["ChromaDB"])
 
 @app.get("/")
 def home():
