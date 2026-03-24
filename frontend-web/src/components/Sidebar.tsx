@@ -1,81 +1,116 @@
-import { CalendarDays, LayoutDashboard, LogOut, PieChart, TrendingUp } from 'lucide-react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import React from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-type SidebarProps = {
-  username: string
-  onLogout: () => void
-}
+const NAV = [
+  { path: '/', icon: 'HM', label: 'Home' },
+  { path: '/dashboard', icon: 'DB', label: 'Dashboard' },
+  { path: '/stocks', icon: 'ST', label: 'Stocks' },
+  { path: '/portfolio', icon: 'PF', label: 'Portfolio' },
+  { path: '/watchlist', icon: 'WL', label: 'Watchlist' },
+  { path: '/growth', icon: 'GR', label: 'Growth' },
+  { path: '/ml-analysis', icon: 'ML', label: 'ML Analysis' },
+  { path: '/compare', icon: 'CP', label: 'Compare' },
+  { path: '/gold-silver', icon: 'GS', label: 'Gold and Silver' },
+  { path: '/crypto', icon: 'CR', label: 'Crypto' },
+  { path: '/news', icon: 'NW', label: 'News' },
+];
 
-const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/stocks', label: 'Stocks', icon: TrendingUp },
-  { to: '/portfolio', label: 'Portfolio', icon: PieChart },
-]
-
-export default function Sidebar({ username, onLogout }: SidebarProps) {
-  const navigate = useNavigate()
+export const Sidebar: React.FC = () => {
+  const location = useLocation();
+  const { username } = useAuth();
 
   return (
-    <aside className="hidden w-72 shrink-0 border-r border-app-border bg-app-card/80 backdrop-blur xl:flex xl:flex-col">
-      <div className="border-b border-app-border px-6 py-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-app-accent/15 text-app-accent shadow-glow">
-            <TrendingUp size={22} />
-          </div>
-          <div>
-            <p className="font-display text-2xl font-semibold tracking-tight text-app-text">
-              StockSphere
-            </p>
-            <p className="text-sm text-app-muted">Market intelligence workspace</p>
-          </div>
-        </div>
-      </div>
+    <aside
+      style={{
+        position: 'fixed',
+        left: 0,
+        top: 44,
+        bottom: 0,
+        width: 200,
+        background: 'linear-gradient(180deg, #0d0b1e 0%, #08051a 100%)',
+        borderRight: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        zIndex: 800,
+        overflowY: 'auto',
+      }}
+    >
+      <nav style={{ padding: '12px 0', flex: 1 }}>
+        {NAV.map((item) => {
+          const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
 
-      <div className="px-6 py-5">
-        <div className="rounded-2xl border border-app-border bg-white/5 p-4">
-          <p className="text-xs uppercase tracking-[0.24em] text-app-muted">Welcome back</p>
-          <p className="mt-2 text-lg font-semibold text-app-text">{username}</p>
-          <div className="mt-3 flex items-center gap-2 text-sm text-app-secondary">
-            <CalendarDays size={16} />
-            <span>Stocks, signals, and portfolio views</span>
-          </div>
-        </div>
-      </div>
-
-      <nav className="flex-1 px-4 py-3">
-        <div className="space-y-2">
-          {navItems.map(({ to, label, icon: Icon }) => (
+          return (
             <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                  isActive
-                    ? 'border border-app-accent/40 bg-app-accent/12 text-app-text shadow-glow'
-                    : 'border border-transparent text-app-secondary hover:border-app-border hover:bg-white/5 hover:text-app-text'
-                }`
-              }
+              key={item.path}
+              to={item.path}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '9px 16px',
+                textDecoration: 'none',
+                fontSize: 12,
+                color: isActive ? 'var(--purple-light)' : 'var(--text-muted)',
+                background: isActive
+                  ? 'linear-gradient(90deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.04) 100%)'
+                  : 'transparent',
+                borderLeft: isActive ? '2px solid var(--purple)' : '2px solid transparent',
+                boxShadow: isActive ? 'inset 0 0 20px rgba(124,58,237,0.08)' : 'none',
+                transition: 'all 0.2s ease',
+                position: 'relative',
+              }}
+              onMouseEnter={(event) => {
+                if (!isActive) {
+                  event.currentTarget.style.color = 'var(--purple-light)';
+                  event.currentTarget.style.background = 'rgba(124,58,237,0.06)';
+                }
+              }}
+              onMouseLeave={(event) => {
+                if (!isActive) {
+                  event.currentTarget.style.color = 'var(--text-muted)';
+                  event.currentTarget.style.background = 'transparent';
+                }
+              }}
             >
-              <Icon size={18} />
-              <span>{label}</span>
+              <span style={{ fontSize: 11, width: 18, textAlign: 'center', fontWeight: 700 }}>{item.icon}</span>
+              <span>{item.label}</span>
+              {isActive ? (
+                <span
+                  style={{
+                    position: 'absolute',
+                    right: 10,
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: 'var(--purple)',
+                    boxShadow: '0 0 8px var(--purple)',
+                  }}
+                />
+              ) : null}
             </NavLink>
-          ))}
-        </div>
+          );
+        })}
       </nav>
 
-      <div className="border-t border-app-border p-4">
-        <button
-          type="button"
-          onClick={() => {
-            onLogout()
-            navigate('/login')
+      {username ? (
+        <div
+          style={{
+            margin: 12,
+            padding: 12,
+            borderRadius: 10,
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
           }}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-app-border bg-white/5 px-4 py-3 text-sm font-medium text-app-text transition hover:border-app-accent/40 hover:bg-app-accent/10"
         >
-          <LogOut size={18} />
-          Logout
-        </button>
-      </div>
+          <div className="label" style={{ marginBottom: 4 }}>Logged In As</div>
+          <div style={{ fontSize: 12, color: 'var(--purple-light)', fontWeight: 600 }}>{username}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
+            <span className="pulse-dot" style={{ background: 'var(--green)' }} />
+            <span style={{ fontSize: 10, color: 'var(--green)' }}>Online</span>
+          </div>
+        </div>
+      ) : null}
     </aside>
-  )
-}
+  );
+};

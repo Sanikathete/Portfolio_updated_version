@@ -1,184 +1,84 @@
-import { Download, FileDown, LoaderCircle } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { downloadReport, fetchPortfolio, type PortfolioItem } from '../api/axios'
+import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+import axios from '../api/axios';
+import { PageLayout } from '../components/PageLayout';
+import { SectionHeader } from '../components/SectionHeader';
+import { SentimentBadge } from '../components/SentimentBadge';
+import { RatingBadge } from '../components/RatingBadge';
+import { usePortfolio } from '../context/PortfolioContext';
+import { getRating, getCompanyName } from '../utils/pageUtils';
 
-function toNumber(value: number | string | null | undefined) {
-  const numericValue = Number(value ?? 0)
-  return Number.isFinite(numericValue) ? numericValue : 0
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(value)
-}
-
-export default function Portfolio() {
-  const [items, setItems] = useState<PortfolioItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [downloadError, setDownloadError] = useState('')
-  const [downloading, setDownloading] = useState<'pdf' | 'csv' | null>(null)
+const Portfolio: React.FC = () => {
+  const { activePortfolioId } = usePortfolio();
+  const [rows, setRows] = useState<any[]>([]);
 
   useEffect(() => {
-    async function loadPortfolio() {
-      setLoading(true)
-      setError('')
-
+    const load = async () => {
+      if (!activePortfolioId) return setRows([]);
       try {
-        const data = await fetchPortfolio()
-        const flattenedItems = data.flatMap((portfolio) => portfolio.items ?? [])
-        setItems(flattenedItems)
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Unable to load portfolio data.'
-        setError(message)
-      } finally {
-        setLoading(false)
+        const res = await axios.get(`/api/portfolio/?portfolio_id=${activePortfolioId}`);
+        const items = res.data?.items || res.data || [];
+        const arr = Array.isArray(items) ? items : [];
+        const enriched = await Promise.all(arr.map(async (item) => {
+          const stock = item.stock || item;
+          let forecast3m = 0;
+          let forecast1y = 0;
+          let perf5y = 0;
+          try {
+            const [f3, f1, perf] = await Promise.all([
+              axios.get(`/api/portfolio/forecast/?symbol=${stock.symbol}&period=3m`),
+              axios.get(`/api/portfolio/forecast/?symbol=${stock.symbol}&period=1y`),
+              axios.get(`/api/stocks/${stock.symbol}/performance/?period=5y`),
+            ]);
+            forecast3m = Number(f3.data?.forecast_percent ?? f3.data?.value ?? 0);
+            forecast1y = Number(f1.data?.forecast_percent ?? f1.data?.value ?? 0);
+            perf5y = Number(perf.data?.performance_percent ?? perf.data?.value ?? 0);
+          } catch {}
+          return { ...item, stock, forecast3m, forecast1y, perf5y };
+        }));
+        setRows(enriched);
+      } catch {
+        toast.error('Unable to load portfolio analytics.');
       }
-    }
-
-    void loadPortfolio()
-  }, [])
-
-  const totalValue = useMemo(
-    () =>
-      items.reduce(
-        (sum, item) => sum + toNumber(item.quantity) * toNumber(item.stock?.current_price),
-        0,
-      ),
-    [items],
-  )
-
-  async function handleDownload(type: 'pdf' | 'csv') {
-    setDownloading(type)
-    setDownloadError('')
-
-    try {
-      if (type === 'pdf') {
-        await downloadReport('/reports/watchlist/pdf', 'stocksphere-watchlist.pdf')
-      } else {
-        await downloadReport('/reports/watchlist/csv', 'stocksphere-watchlist.csv')
-      }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : `Unable to download ${type.toUpperCase()}.`
-      setDownloadError(message)
-    } finally {
-      setDownloading(null)
-    }
-  }
+    };
+    void load();
+  }, [activePortfolioId]);
 
   return (
-    <div className="min-h-screen bg-app px-4 py-4 sm:px-6 lg:px-8">
-      <div className="panel">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.24em] text-app-accent">Portfolio</p>
-            <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-app-text">
-              Holdings Overview
-            </h1>
-            <p className="mt-2 text-app-secondary">
-              Review current values and export your watchlist reports.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => void handleDownload('pdf')}
-              disabled={downloading !== null}
-              className="secondary-action"
-            >
-              {downloading === 'pdf' ? (
-                <LoaderCircle size={16} className="animate-spin" />
-              ) : (
-                <FileDown size={16} />
-              )}
-              Download PDF
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleDownload('csv')}
-              disabled={downloading !== null}
-              className="secondary-action"
-            >
-              {downloading === 'csv' ? (
-                <LoaderCircle size={16} className="animate-spin" />
-              ) : (
-                <Download size={16} />
-              )}
-              Download CSV
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-6 rounded-[1.5rem] border border-app-border bg-white/5 p-5">
-          <p className="text-sm text-app-muted">Total portfolio value</p>
-          <p className="mt-2 font-display text-4xl font-semibold tracking-tight text-app-text">
-            {formatCurrency(totalValue)}
-          </p>
-        </div>
-
-        {downloadError ? (
-          <div className="mt-6 rounded-2xl border border-app-loss/30 bg-app-loss/10 px-4 py-3 text-sm text-app-loss">
-            {downloadError}
-          </div>
-        ) : null}
-
-        {loading ? (
-          <div className="flex min-h-[320px] items-center justify-center gap-3 text-app-secondary">
-            <LoaderCircle className="animate-spin text-app-accent" size={22} />
-            <span>Loading portfolio...</span>
-          </div>
-        ) : error ? (
-          <div className="mt-6 rounded-2xl border border-app-loss/30 bg-app-loss/10 px-4 py-3 text-sm text-app-loss">
-            {error}
-          </div>
-        ) : items.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-app-border bg-white/5 px-4 py-10 text-center text-app-secondary">
-            No portfolio data yet
-          </div>
-        ) : (
-          <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-app-border">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-app-border">
-                <thead className="bg-white/5">
-                  <tr className="text-left text-xs uppercase tracking-[0.18em] text-app-muted">
-                    <th className="px-5 py-4">Stock</th>
-                    <th className="px-5 py-4">Name</th>
-                    <th className="px-5 py-4">Current Price</th>
-                    <th className="px-5 py-4">Value</th>
+    <PageLayout title="Portfolio">
+      <SectionHeader label="Portfolio Intelligence" title="Portfolio" description="Forecasts and five-year performance refresh against the selected portfolio in the header." />
+      <div className="glass-card" style={{ padding: 18 }}>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Stock Name</th><th>Ticker</th><th>Rating</th><th>Sentiment</th><th>3M Forecast</th><th>1Y Forecast</th><th>5Y Performance</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const stock = row.stock;
+                const rating = getRating(stock);
+                return (
+                  <tr key={stock.symbol}>
+                    <td>{getCompanyName(stock)}</td>
+                    <td>{stock.symbol}</td>
+                    <td><RatingBadge rating={rating} /></td>
+                    <td><SentimentBadge sentiment={String(stock.sentiment || 'Neutral')} /></td>
+                    <td style={{ color: row.forecast3m >= 0 ? 'var(--green)' : 'var(--red)' }}>{row.forecast3m >= 0 ? '↑' : '↓'} {row.forecast3m.toFixed(1)}%</td>
+                    <td style={{ color: row.forecast1y >= 0 ? 'var(--green)' : 'var(--red)' }}>{row.forecast1y >= 0 ? '↑' : '↓'} {row.forecast1y.toFixed(1)}%</td>
+                    <td style={{ color: row.perf5y >= 0 ? 'var(--green)' : 'var(--red)' }}>{row.perf5y >= 0 ? '↑' : '↓'} {row.perf5y.toFixed(1)}%</td>
+                    <td><button className="btn btn-primary" style={{ padding: '4px 8px' }} onClick={() => (window.location.href = `/portfolio/stock/${stock.symbol}`)}>View Details</button></td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-app-border bg-app-card/60">
-                  {items.map((item) => {
-                    const currentPrice = toNumber(item.stock?.current_price)
-                    const value = currentPrice * toNumber(item.quantity)
-
-                    return (
-                      <tr key={item.id} className="text-sm text-app-secondary">
-                        <td className="px-5 py-4 font-semibold text-app-text">
-                          {item.stock?.symbol ?? 'N/A'}
-                        </td>
-                        <td className="px-5 py-4">{item.stock?.name ?? 'Unknown stock'}</td>
-                        <td className="px-5 py-4 text-app-gain">
-                          {formatCurrency(currentPrice)}
-                        </td>
-                        <td className="px-5 py-4 font-semibold text-app-text">
-                          {formatCurrency(value)}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                );
+              })}
+              {!rows.length ? <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No portfolio analytics available.</td></tr> : null}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
-  )
-}
+    </PageLayout>
+  );
+};
+
+export default Portfolio;

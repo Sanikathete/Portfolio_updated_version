@@ -1,219 +1,147 @@
-import { ChevronLeft, ChevronRight, LoaderCircle, Search } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { fetchStocks, type Stock } from '../api/axios'
+import React, { useEffect, useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
+import axios from '../api/axios';
+import { PageLayout } from '../components/PageLayout';
+import { SectionHeader } from '../components/SectionHeader';
+import { SentimentBadge } from '../components/SentimentBadge';
+import { RatingBadge } from '../components/RatingBadge';
+import { SkeletonTable } from '../components/SkeletonTable';
+import { useCurrency } from '../context/CurrencyContext';
+import { getCompanyName, getExchange, getPrice, getSector, getChangePercent, getRating, getSentimentScore } from '../utils/pageUtils';
 
-const PAGE_SIZE = 20
+const sectorFilters = ['All', 'Nifty IT', 'Nifty Bank', 'Nifty Auto', 'Nifty FMCG', 'Nifty Pharma', 'Nifty Metal', 'Nifty Realty', 'Nifty Energy', 'USA Tech', 'USA Healthcare', 'Crypto'];
 
-function toNumber(value: number | string | null | undefined) {
-  const numericValue = Number(value ?? 0)
-  return Number.isFinite(numericValue) ? numericValue : 0
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(value)
-}
-
-export default function Stocks() {
-  const [stocks, setStocks] = useState<Stock[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [search, setSearch] = useState('')
-  const [sector, setSector] = useState('All')
-  const [page, setPage] = useState(1)
+const Stocks: React.FC = () => {
+  const { format } = useCurrency();
+  const [stocks, setStocks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [sector, setSector] = useState('All');
+  const [page, setPage] = useState(1);
+  const perPage = 15;
 
   useEffect(() => {
-    async function loadStocks() {
-      setLoading(true)
-      setError('')
-
+    const fetchAllStocks = async () => {
+      setLoading(true);
       try {
-        const data = await fetchStocks()
-        setStocks(data)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unable to fetch stocks.'
-        setError(message)
+        let allStocks: any[] = [];
+        let offset = 0;
+        const limit = 100;
+        while (true) {
+          const res = await axios.get(`/api/stocks/?limit=${limit}&offset=${offset}`);
+          const data = res.data?.results || res.data || [];
+          const arr = Array.isArray(data) ? data : [];
+          allStocks = [...allStocks, ...arr];
+          if (arr.length < limit) break;
+          offset += limit;
+          if (offset > 500) break;
+        }
+        setStocks(allStocks);
+      } catch {
+        toast.error('Unable to load stocks.');
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
+    };
+    void fetchAllStocks();
+  }, []);
+
+  const filtered = useMemo(() => stocks.filter((stock) => {
+    const matchesSearch = `${stock.symbol} ${getCompanyName(stock)}`.toLowerCase().includes(search.toLowerCase());
+    if (!matchesSearch) return false;
+    if (sector === 'All') return true;
+    const normalized = `${getSector(stock)} ${getExchange(stock)} ${stock.symbol}`.toLowerCase();
+    return normalized.includes(sector.replace('Nifty ', '').toLowerCase()) || normalized.includes(sector.toLowerCase());
+  }), [stocks, search, sector]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
+  const visible = filtered.slice((page - 1) * perPage, page * perPage);
+
+  useEffect(() => { setPage(1); }, [search, sector]);
+
+  const addToWatchlist = async (symbol: string) => {
+    try {
+      let response;
+      try {
+        response = await axios.post('/api/watchlist/', { stock_symbol: symbol });
+      } catch (error) {
+        response = await axios.post('/api/watchlist/', { ticker: symbol });
+      }
+      console.log('watchlist add response', response.status, response.data);
+      if (response.status === 200 || response.status === 201) toast.success('Stock added to watchlist!');
+      else toast.error('Failed to add stock. Please try again.');
+    } catch (error: any) {
+      console.error('watchlist add error', error?.response?.status, error?.response?.data);
+      toast.error('Failed to add stock. Please try again.');
     }
-
-    void loadStocks()
-  }, [])
-
-  const sectors = useMemo(
-    () => ['All', ...new Set(stocks.map((stock) => stock.sector || 'Unknown'))],
-    [stocks],
-  )
-
-  const filteredStocks = useMemo(() => {
-    const query = search.trim().toLowerCase()
-
-    return stocks.filter((stock) => {
-      const matchesSearch =
-        !query ||
-        stock.name.toLowerCase().includes(query) ||
-        stock.symbol.toLowerCase().includes(query)
-
-      const stockSector = stock.sector || 'Unknown'
-      const matchesSector = sector === 'All' || stockSector === sector
-
-      return matchesSearch && matchesSector
-    })
-  }, [search, sector, stocks])
-
-  const totalPages = Math.max(1, Math.ceil(filteredStocks.length / PAGE_SIZE))
-
-  const currentPageStocks = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE
-    return filteredStocks.slice(start, start + PAGE_SIZE)
-  }, [filteredStocks, page])
-
-  useEffect(() => {
-    setPage(1)
-  }, [search, sector])
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages)
-    }
-  }, [page, totalPages])
+  };
 
   return (
-    <div className="min-h-screen bg-app px-4 py-4 sm:px-6 lg:px-8">
-      <div className="panel">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.24em] text-app-accent">Stocks</p>
-            <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-app-text">
-              Market Directory
-            </h1>
-            <p className="mt-2 text-app-secondary">
-              Search by company name or ticker, then narrow by sector.
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-[1.2fr_220px]">
-            <label className="relative block">
-              <Search
-                size={18}
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-app-muted"
-              />
-              <input
-                type="text"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by name or symbol"
-                className="input-field pl-11"
-              />
-            </label>
-
-            <select
-              value={sector}
-              onChange={(event) => setSector(event.target.value)}
-              className="input-field appearance-none"
-            >
-              {sectors.map((sectorOption) => (
-                <option key={sectorOption} value={sectorOption}>
-                  {sectorOption}
-                </option>
-              ))}
-            </select>
+    <PageLayout title="Stocks">
+      <SectionHeader label="Market Universe" title="Stocks" description={`Loaded ${stocks.length} stocks from the backend. Search and sector filtering are applied client-side.`} />
+      <div style={{ display: 'grid', gap: 16 }}>
+        <div className="glass-card" style={{ padding: 18 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input className="input-field" placeholder="Search by symbol or company..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ maxWidth: 340 }} />
+            {sectorFilters.map((name) => (
+              <button key={name} className={sector === name ? 'btn btn-primary' : 'btn btn-outline'} style={{ padding: '6px 12px' }} onClick={() => setSector(name)}>
+                {name}
+              </button>
+            ))}
           </div>
         </div>
 
-        {loading ? (
-          <div className="flex min-h-[360px] items-center justify-center gap-3 text-app-secondary">
-            <LoaderCircle className="animate-spin text-app-accent" size={22} />
-            <span>Loading stocks...</span>
-          </div>
-        ) : error ? (
-          <div className="mt-6 rounded-2xl border border-app-loss/30 bg-app-loss/10 px-4 py-3 text-sm text-app-loss">
-            {error}
-          </div>
-        ) : (
-          <>
-            <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-app-border">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-app-border">
-                  <thead className="bg-white/5">
-                    <tr className="text-left text-xs uppercase tracking-[0.18em] text-app-muted">
-                      <th className="px-5 py-4">Symbol</th>
-                      <th className="px-5 py-4">Name</th>
-                      <th className="px-5 py-4">Sector</th>
-                      <th className="px-5 py-4">Exchange</th>
-                      <th className="px-5 py-4">Current Price</th>
+        <div className="glass-card" style={{ padding: 18 }}>
+          {loading ? <SkeletonTable rows={10} cols={10} /> : (
+            <>
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Symbol</th><th>Company</th><th>Sector</th><th>Exchange</th><th>Price</th><th>Change %</th><th>Sentiment</th><th>Rating</th><th>Score</th><th>Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-app-border bg-app-card/60">
-                    {currentPageStocks.map((stock) => {
-                      const price = toNumber(stock.current_price)
-                      const isUp = price >= 0
-
+                  <tbody>
+                    {visible.map((stock) => {
+                      const rating = getRating(stock);
+                      const change = getChangePercent(stock);
+                      const score = Math.min(100, Math.max(0, getSentimentScore(stock) * 100));
                       return (
-                        <tr key={stock.id} className="text-sm text-app-secondary">
-                          <td className="px-5 py-4 font-semibold text-app-text">{stock.symbol}</td>
-                          <td className="px-5 py-4">{stock.name}</td>
-                          <td className="px-5 py-4">{stock.sector || 'Unknown'}</td>
-                          <td className="px-5 py-4">{stock.exchange || 'N/A'}</td>
-                          <td
-                            className={`px-5 py-4 font-semibold ${
-                              isUp ? 'text-app-gain' : 'text-app-loss'
-                            }`}
-                          >
-                            {formatCurrency(price)}
+                        <tr key={stock.symbol}>
+                          <td>{stock.symbol}</td>
+                          <td>{getCompanyName(stock)}</td>
+                          <td>{getSector(stock)}</td>
+                          <td>{getExchange(stock)}</td>
+                          <td>{format(getPrice(stock))}</td>
+                          <td style={{ color: change >= 0 ? 'var(--green)' : 'var(--red)' }}>{change >= 0 ? '▲' : '▼'} {Math.abs(change).toFixed(2)}%</td>
+                          <td><SentimentBadge sentiment={String(stock.sentiment || 'Neutral')} /></td>
+                          <td><RatingBadge rating={rating} /></td>
+                          <td><div style={{ width: 80, height: 6, background: 'var(--bg-panel)', borderRadius: 999 }}><div style={{ width: `${score}%`, height: '100%', background: 'linear-gradient(90deg, var(--purple), var(--accent-gold))', borderRadius: 999 }} /></div></td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button className="btn btn-outline" style={{ padding: '4px 8px' }} onClick={() => addToWatchlist(stock.symbol)}>★ Watchlist</button>
+                              <button className="btn btn-outline" style={{ padding: '4px 8px' }} onClick={() => window.print()}>↓ PDF</button>
+                              <button className="btn btn-primary" style={{ padding: '4px 8px' }} onClick={() => (window.location.href = `/stocks/${stock.symbol}`)}>→ View</button>
+                            </div>
                           </td>
                         </tr>
-                      )
+                      );
                     })}
+                    {!visible.length ? <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No stocks match the current filters.</td></tr> : null}
                   </tbody>
                 </table>
               </div>
-            </div>
-
-            {filteredStocks.length === 0 ? (
-              <div className="mt-6 rounded-2xl border border-app-border bg-white/5 px-4 py-8 text-center text-app-secondary">
-                No stocks matched your search.
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+                {Array.from({ length: pageCount }, (_, index) => index + 1).map((num) => (
+                  <button key={num} className={page === num ? 'btn btn-primary' : 'btn btn-outline'} style={{ padding: '6px 10px' }} onClick={() => setPage(num)}>{num}</button>
+                ))}
               </div>
-            ) : null}
-
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-app-secondary">
-                Showing {(page - 1) * PAGE_SIZE + 1}-
-                {Math.min(page * PAGE_SIZE, filteredStocks.length)} of {filteredStocks.length}{' '}
-                stocks
-              </p>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  disabled={page === 1}
-                  className="pagination-button"
-                >
-                  <ChevronLeft size={16} />
-                  Prev
-                </button>
-                <span className="rounded-xl border border-app-border px-4 py-2 text-sm text-app-text">
-                  Page {page} of {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                  disabled={page === totalPages}
-                  className="pagination-button"
-                >
-                  Next
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
-    </div>
-  )
-}
+    </PageLayout>
+  );
+};
+
+export default Stocks;
