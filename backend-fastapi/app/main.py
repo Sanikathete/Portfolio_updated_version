@@ -9,6 +9,7 @@ from app.routers import reports
 from app.routers import chatbot
 from app.routers import stocks
 from app.routers import load_stocks
+from app.routers import pgvector_routes
 
 load_dotenv()
 
@@ -30,6 +31,7 @@ app.include_router(reports.router, prefix="/reports", tags=["Reports"])
 app.include_router(chatbot.router, prefix="/chatbot", tags=["Chatbot"])
 app.include_router(stocks.router, prefix="/data", tags=["Stocks & Portfolio"])
 app.include_router(load_stocks.router, prefix="/chromadb", tags=["ChromaDB"])
+app.include_router(pgvector_routes.router, prefix="/pgvector", tags=["PGVector"])
 
 @app.get("/")
 def home():
