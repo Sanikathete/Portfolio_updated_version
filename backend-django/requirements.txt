@@ -17,7 +17,7 @@ click-repl==0.3.0
 cron-descriptor==1.4.5
 dataclasses-json==0.6.7
 distro==1.9.0
-Django==6.0.3
+Django==5.2.12
 django-celery-beat==2.9.0
 django-cors-headers==4.9.0
 django-timezone-field==7.2.1
