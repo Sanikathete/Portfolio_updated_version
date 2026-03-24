@@ -225,6 +225,18 @@ async def get_user_watchlist(token: str):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def find_stock(stocks: list, query: str):
+    query_lower = query.lower()
+    general_stock_list_phrases = [
+        "best indian stocks",
+        "indian stocks to buy",
+        "best nse stocks",
+        "top nse stocks",
+        "best stocks in india",
+        "india stocks to buy",
+    ]
+    if any(phrase in query_lower for phrase in general_stock_list_phrases):
+        return None
+
     query_upper = query.upper()
     query_words = [w for w in query_upper.split() if len(w) > 2]
 
@@ -248,6 +260,38 @@ def get_stocks_by_sector(stocks: list, sector_keyword: str):
     return [s for s in stocks if sector_upper in s.get("sector", "").upper()][:5]
 
 
+def pick_diverse_stocks(primary_stocks: list, fallback_stocks: list, limit: int = 4):
+    selected = []
+    seen_symbols = set()
+    seen_sectors = set()
+
+    for pool in (primary_stocks or [], fallback_stocks or []):
+        for stock in pool:
+            symbol = stock.get("symbol")
+            sector = (stock.get("sector") or "Unknown").strip()
+            if not symbol or symbol in seen_symbols:
+                continue
+            if sector in seen_sectors and len(seen_sectors) < limit:
+                continue
+            selected.append(stock)
+            seen_symbols.add(symbol)
+            seen_sectors.add(sector)
+            if len(selected) >= limit:
+                return selected
+
+    if len(selected) < limit:
+        for stock in (primary_stocks or []) + (fallback_stocks or []):
+            symbol = stock.get("symbol")
+            if not symbol or symbol in seen_symbols:
+                continue
+            selected.append(stock)
+            seen_symbols.add(symbol)
+            if len(selected) >= limit:
+                break
+
+    return selected
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # QUESTION TYPE DETECTOR  (14 types + greeting)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -257,32 +301,34 @@ def detect_question_type(message: str) -> str:
 
     greeting_kw = ["hello", "hi", "hey", "good morning", "good evening", "who are you", "what can you do", "how does this work"]
     compare_kw = ["compare", " vs ", "versus", "which is better", "better between"]
-    portfolio_kw = ["my portfolio", "portfolio analysis", "my profit", "my loss", "rebalance", "my stocks", "how is my portfolio"]
+    portfolio_kw = ["my portfolio", "portfolio analysis", "my profit", "my loss", "rebalance", "how is my portfolio"]
     watchlist_kw = ["my watchlist", "show watchlist", "add to watchlist", "remove from watchlist"]
-    dividend_kw = ["dividend", "dividend yield", "dividend paying", "regular dividend"]
+    dividend_kw = ["dividend", "dividend yield", "dividend paying", "regular dividend", "highest dividend", "give dividend", "dividend stocks"]
     ipo_kw = ["ipo", "initial public offering", "upcoming ipo", "new listing", "new ipo"]
+    out_of_scope_kw = ["nyse", "nasdaq", "us stock", "us stocks", "us market", "american stock", "american stocks"]
     risk_kw = ["avoid", "risky stock", "overvalued", "stay away", "stocks in loss", "which stocks to avoid", "not buy", "shouldn't buy", "should not buy"]
-    buy_kw = ["buy", "invest", "purchase", "should i buy", "good stock", "best stock", "recommend", "suggest", "which stock", "stock for beginner", "safe stock", "stock under"]
+    buy_kw = ["buy", "invest", "purchase", "should i buy", "good stock", "best stock", "recommend", "suggest", "which stock", "stock for beginner", "safe stock", "stock under", "top nyse", "best nyse", "nyse stocks", "top nasdaq", "best nasdaq", "nasdaq stocks", "best nse", "top nse", "nse stocks"]
     sell_kw = ["sell", "exit", "should i sell", "when to sell", "book profit", "right time to sell"]
-    shortterm_kw = ["short term", "swing trading", "intraday", "quick profit", "short term trading", "swing trade"]
+    shortterm_kw = ["short term", "swing trading", "intraday", "quick profit", "short term trading", "swing trade", "trading stocks", "stocks to trade"]
     longterm_kw = ["long term", "5 years", "10 years", "hold for", "long term investment", "best returns in 1 year", "hold long"]
-    sector_kw = ["sector", "it stocks", "banking stocks", "pharma", "auto stocks", "fmcg", "energy stocks", "top stocks in", "best stocks in"]
+    sector_kw = ["sector", "it stocks", "banking stocks", "pharma", "auto stocks", "fmcg", "energy stocks", "top stocks in", "best stocks in", "it sector", "tech sector", "information technology", "banking sector", "pharma sector", "fmcg sector", "auto sector", "realty sector", "energy sector", "finance sector", "healthcare sector"]
     news_kw = ["news", "market news", "what happened", "market today", "market update", "why is", "falling", "rising"]
     price_kw = ["price", "current price", "stock price", "how much", "52 week", "market cap", "pe ratio", "p/e ratio"]
     info_kw = ["what is", "explain", "tell me about", "who is", "what does", "define"]
 
-    if any(k in msg for k in greeting_kw):      return "greeting"
+    if any(re.search(r'\b' + re.escape(k) + r'\b', msg) for k in greeting_kw):      return "greeting"
     if any(k in msg for k in compare_kw):        return "compare_stocks"
     if any(k in msg for k in portfolio_kw):      return "portfolio_analysis"
     if any(k in msg for k in watchlist_kw):      return "watchlist_query"
     if any(k in msg for k in dividend_kw):       return "dividend_query"
     if any(k in msg for k in ipo_kw):            return "ipo_query"
     if any(k in msg for k in risk_kw):           return "avoid_advice"
-    if any(k in msg for k in buy_kw):            return "buy_advice"
-    if any(k in msg for k in sell_kw):           return "sell_advice"
     if any(k in msg for k in shortterm_kw):      return "shortterm_advice"
     if any(k in msg for k in longterm_kw):       return "longterm_advice"
     if any(k in msg for k in sector_kw):         return "sector_query"
+    if any(k in msg for k in out_of_scope_kw):   return "out_of_scope"
+    if any(k in msg for k in buy_kw):            return "buy_advice"
+    if any(k in msg for k in sell_kw):           return "sell_advice"
     if any(k in msg for k in news_kw):           return "market_news"
     if any(k in msg for k in price_kw):          return "price_query"
     if any(k in msg for k in info_kw):           return "general_info"
@@ -324,6 +370,15 @@ async def public_chat(message: str):
     found_stock    = find_stock(stocks, message)
     question_type  = detect_question_type(message)
     pgvector_results = search_similar_stocks(message)
+    msg_lower = message.lower()
+    us_keywords = ["us stock", "us stocks", "us market", "american stock", "american stocks", "nyse", "nasdaq", "s&p", "dow jones", "wall street", "top nyse", "best nyse", "nyse stocks", "top nasdaq", "best nasdaq", "nasdaq stocks"]
+    india_keywords = ["nse", "bse", "nse stocks", "best nse", "top nse", "indian stock", "indian stocks", "india market", "india stocks", "sensex", "nifty"]
+
+    if any(k in msg_lower for k in us_keywords):
+        pgvector_results = [s for s in pgvector_results if s.get("exchange", "").upper() in ("NYSE", "NASDAQ")]
+    elif any(k in msg_lower for k in india_keywords):
+        pgvector_results = [s for s in pgvector_results if s.get("exchange", "").upper() == "NSE"]
+    # else: no filter — return mixed results for generic queries
 
     # ── Fetch live data based on context ──────────────────────────────────────
     live_price_ctx = ""
@@ -419,10 +474,21 @@ Instructions:
 - Suggest safer alternatives like blue chip / large cap stocks
 - Always add: This is not financial advice. Please consult a SEBI-registered advisor."""
 
+    elif question_type == "out_of_scope":
+        prompt = f"""User asked: {message}
+
+Instructions:
+- Politely inform the user that StockSphere currently covers only NSE-listed Indian stocks
+- Do NOT suggest Indian stocks as replacements for NYSE/NASDAQ stocks
+- Tell them they can explore 388 NSE stocks on StockSphere
+- Suggest they check Yahoo Finance or Google Finance for US stock data
+- Keep it short, friendly, and helpful
+- Add disclaimer: This is not financial advice."""
+
     elif question_type == "buy_advice":
-        sample_stocks = pgvector_results if pgvector_results else stocks[:20]
+        sample_stocks = pick_diverse_stocks(pgvector_results, stocks, limit=4)
         sample_text = "\n".join([
-            f"- {s.get('symbol')} | {s.get('name')} | {'₹' if s.get('exchange','').upper() == 'NSE' else '$'}{s.get('current_price')} | {s.get('sector')} | {s.get('exchange','NSE')}"
+            f"- {s.get('symbol')} | {s.get('name')} | ₹{s.get('current_price')} | {s.get('sector')} | {s.get('exchange','NSE')}"
             for s in sample_stocks
         ])
         prompt = f"""User asked: {message}
@@ -434,8 +500,7 @@ Instructions:
 - Suggest 3-4 stocks from different sectors
 - Explain briefly why each might be worth looking at
 - Mention StockSphere has 388 NSE stocks to explore
-- Always add: This is not financial advice. Do your own research and consult a SEBI-registered advisor."""
-
+- Always add: This is not financial advice. Do your own research and consult a SEBI-registered advisor.""" 
     elif question_type == "sector_query":
         sector_map = {
             "it": "Information Technology", "tech": "Information Technology",

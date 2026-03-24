@@ -60,11 +60,12 @@ const Watchlist: React.FC = () => {
   const remove = async (item: any) => {
     try {
       const stock = item.stock || item;
-      await axios.delete('/api/watchlist/remove/', { data: { stock_symbol: stock.symbol, watchlist_id: item.watchlist_id } });
+      const watchlistId = item.watchlist_id;
+      await axios.post(`/api/watchlist/${watchlistId}/remove_stock/`, { stock_id: stock.id });
       toast.success('Removed from watchlist');
       await load();
     } catch {
-      toast.error('Cannot connect to server');
+      toast.error('Failed to remove from watchlist');
     }
   };
 
@@ -76,7 +77,7 @@ const Watchlist: React.FC = () => {
 
     const stock = item.stock || item;
     try {
-      await axios.post('/api/portfolio/', { stock_symbol: stock.symbol, quantity: 1, portfolio_id: selectedPortfolioId });
+      await axios.post(`/api/portfolio/${selectedPortfolioId}/add_stock/`, { stock_symbol: stock.symbol, quantity: 1 });
       toast.success('Added to Portfolio');
     } catch {
       toast.error('Cannot connect to server');

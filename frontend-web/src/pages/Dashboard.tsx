@@ -47,12 +47,20 @@ const Dashboard: React.FC = () => {
   };
 
   const fetchStocks = async () => {
-    const response = await axios.get('/api/stocks/?limit=388&offset=0');
-    const data = response.data?.results || response.data || [];
-    const list = Array.isArray(data) ? data : [];
-    setStocks(list.length ? list : INDIAN_STOCKS);
-    if (!form.stockSymbol && list[0]?.symbol) {
-      setForm((current) => ({ ...current, stockSymbol: list[0].symbol }));
+    const all: any[] = [];
+    let offset = 0;
+    const limit = 100;
+    while (true) {
+      const response = await axios.get(`/api/stocks/?limit=${limit}&offset=${offset}`);
+      const data = response.data?.results || response.data || [];
+      const page = Array.isArray(data) ? data : [];
+      all.push(...page);
+      if (page.length < limit) break;
+      offset += limit;
+    }
+    setStocks(all.length ? all : INDIAN_STOCKS);
+    if (!form.stockSymbol && all[0]?.symbol) {
+      setForm((current) => ({ ...current, stockSymbol: all[0].symbol }));
     }
   };
 
@@ -62,7 +70,7 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    const response = await axios.get(`/api/portfolio/?portfolio_id=${portfolioId}`);
+    const response = await axios.get(`/api/portfolio/${portfolioId}/`);
     const data = response.data?.items || response.data?.results || response.data || [];
     setHoldings(Array.isArray(data) ? data : []);
   };
