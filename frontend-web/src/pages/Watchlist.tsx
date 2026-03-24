@@ -10,72 +10,122 @@ import { getCompanyName, getSector, getPrice, getChangePercent } from '../utils/
 
 const Watchlist: React.FC = () => {
   const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const { format } = useCurrency();
-  const { activePortfolioId } = usePortfolio();
+  const { selectedPortfolioId } = usePortfolio();
 
   const load = async () => {
+    setLoading(true);
     try {
-      const res = await axios.get('/api/watchlist/');
-      const data = res.data?.results || res.data?.items || res.data || [];
-      setItems(Array.isArray(data) ? data : []);
+      const response = await axios.get('/api/watchlist/');
+      const raw = response.data?.results || response.data || [];
+      const lists = Array.isArray(raw) ? raw : [];
+      const collected: any[] = [];
+
+      for (const list of lists) {
+        const embedded = [
+          ...(Array.isArray(list.items) ? list.items : []),
+          ...(Array.isArray(list.stocks) ? list.stocks : []),
+        ];
+
+        if (embedded.length) {
+          embedded.forEach((item) => collected.push({ ...item, watchlist_id: list.id }));
+          continue;
+        }
+
+        if (list.id) {
+          try {
+            const detail = await axios.get(`/api/watchlist/${list.id}/`);
+            const detailItems = detail.data?.items || detail.data?.stocks || [];
+            (Array.isArray(detailItems) ? detailItems : []).forEach((item) => collected.push({ ...item, watchlist_id: list.id }));
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      setItems(collected);
     } catch {
-      toast.error('Unable to load watchlist.');
+      toast.error('Cannot connect to server');
+      setItems([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => { void load(); }, [activePortfolioId]);
+  useEffect(() => {
+    void load();
+  }, []);
 
-  const remove = async (stockSymbol: string) => {
+  const remove = async (item: any) => {
     try {
-      await axios.delete('/api/watchlist/remove/', { data: { stock_symbol: stockSymbol } });
+      const stock = item.stock || item;
+      await axios.delete('/api/watchlist/remove/', { data: { stock_symbol: stock.symbol, watchlist_id: item.watchlist_id } });
       toast.success('Removed from watchlist');
       await load();
     } catch {
-      toast.error('Unable to remove watchlist item.');
+      toast.error('Cannot connect to server');
     }
   };
 
-  const addToPortfolio = async (stockSymbol: string) => {
-    if (!activePortfolioId) return toast.error('Select a portfolio in the header first.');
+  const addToPortfolio = async (item: any) => {
+    if (!selectedPortfolioId) {
+      toast.error('Please select a portfolio from Dashboard');
+      return;
+    }
+
+    const stock = item.stock || item;
     try {
-      await axios.post('/api/portfolio/', { stock_symbol: stockSymbol, quantity: 1, portfolio_id: activePortfolioId });
-      toast.success('Added to portfolio');
+      await axios.post('/api/portfolio/', { stock_symbol: stock.symbol, quantity: 1, portfolio_id: selectedPortfolioId });
+      toast.success('Added to Portfolio');
     } catch {
-      toast.error('Unable to add to portfolio.');
+      toast.error('Cannot connect to server');
     }
   };
 
   return (
     <PageLayout title="Watchlist">
-      <SectionHeader label="Saved Ideas" title="Watchlist" description="Monitor symbols before moving them into the active portfolio." />
+      <SectionHeader label="Saved Ideas" title="Watchlist" description="Review your watchlisted stocks and move them into the selected portfolio." />
       <div className="glass-card" style={{ padding: 18 }}>
-        {!items.length ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>☆ Your watchlist is empty.</div>
+        {loading ? (
+          <div className="empty-state">Loading watchlist...</div>
+        ) : !items.length ? (
+          <div className="empty-state">Your watchlist is empty. Go to Stocks page to add stocks.</div>
         ) : (
           <div className="table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Symbol</th><th>Company</th><th>Sector</th><th>Price</th><th>Change%</th><th>Sentiment</th><th>Date Added</th><th>Actions</th>
+                  <th>Symbol</th>
+                  <th>Company</th>
+                  <th>Sector</th>
+                  <th>Price</th>
+                  <th>Change %</th>
+                  <th>Sentiment</th>
+                  <th>Date Added</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
+                {items.map((item, index) => {
                   const stock = item.stock || item;
+                  const change = getChangePercent(stock);
                   return (
-                    <tr key={stock.symbol}>
+                    <tr key={`${stock.symbol}-${index}`}>
                       <td>{stock.symbol}</td>
                       <td>{getCompanyName(stock)}</td>
                       <td>{getSector(stock)}</td>
                       <td>{format(getPrice(stock))}</td>
-                      <td style={{ color: getChangePercent(stock) >= 0 ? 'var(--green)' : 'var(--red)' }}>{getChangePercent(stock) >= 0 ? '▲' : '▼'} {Math.abs(getChangePercent(stock)).toFixed(2)}%</td>
+                      <td style={{ color: change >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                        {change >= 0 ? '+' : '-'} {Math.abs(change).toFixed(2)}%
+                      </td>
                       <td><SentimentBadge sentiment={String(stock.sentiment || 'Neutral')} /></td>
-                      <td>{String(item.created_at || item.date_added || '—').slice(0, 10)}</td>
+                      <td>{String(item.created_at || item.date_added || '--').slice(0, 10)}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => remove(stock.symbol)}>Remove</button>
-                          <button className="btn btn-primary" style={{ padding: '4px 8px' }} onClick={() => addToPortfolio(stock.symbol)}>Add to Portfolio</button>
-                          <button className="btn btn-outline" style={{ padding: '4px 8px' }} onClick={() => (window.location.href = `/stocks/${stock.symbol}`)}>View</button>
+                          <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => void remove(item)}>Remove</button>
+                          <button className="btn btn-primary" style={{ padding: '4px 8px' }} onClick={() => void addToPortfolio(item)}>Add to Portfolio</button>
+                          <button className="btn btn-outline" style={{ padding: '4px 8px' }} onClick={() => (window.location.href = `/stocks/${stock.symbol}`)}>View Details</button>
                         </div>
                       </td>
                     </tr>

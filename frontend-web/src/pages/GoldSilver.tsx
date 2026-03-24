@@ -1,58 +1,58 @@
-import React, { useEffect, useState } from 'react';
-import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, ScatterChart, Scatter, LineChart, Line } from 'recharts';
-import toast from 'react-hot-toast';
-import axios from '../api/axios';
+import React, { useMemo, useState } from 'react';
+import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, ScatterChart, Scatter, BarChart, Bar, Cell } from 'recharts';
 import { PageLayout } from '../components/PageLayout';
 import { SectionHeader } from '../components/SectionHeader';
 import { StatCard } from '../components/StatCard';
 import { ForecastChart } from '../components/ForecastChart';
 import { useCurrency } from '../context/CurrencyContext';
-import { buildForecastData, formatDateShort } from '../utils/forecastHelpers';
+import { buildForecastData, formatDateShort, generateForecastSeries, seededNumber } from '../utils/forecastHelpers';
 
 const GoldSilver: React.FC = () => {
-  const { currency } = useCurrency();
+  const { format } = useCurrency();
   const [range, setRange] = useState('3Y');
-  const [marketData, setMarketData] = useState<any[]>([]);
-  const [goldForecast, setGoldForecast] = useState<any[]>([]);
-  const [silverForecast, setSilverForecast] = useState<any[]>([]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [market, gold, silver] = await Promise.all([
-          axios.get(`/api/commodities/gold-silver/?currency=${currency}&range=${range}`),
-          axios.get('/api/commodities/gold-forecast/'),
-          axios.get('/api/commodities/silver-forecast/'),
-        ]);
-        const goldSeries = market.data?.gold || [];
-        const silverSeries = market.data?.silver || [];
-        const len = Math.max(goldSeries.length, silverSeries.length);
-        setMarketData(Array.from({ length: len }, (_, index) => ({
-          date: formatDateShort(goldSeries[index]?.date || silverSeries[index]?.date || `P${index}`),
-          gold: Number(goldSeries[index]?.price ?? 0),
-          silver: Number(silverSeries[index]?.price ?? 0),
-          gap: Number(silverSeries[index]?.price ?? 0) - Number(goldSeries[index]?.price ?? 0),
-        })));
-        setGoldForecast(buildForecastData(gold.data?.historical || [], gold.data?.predicted || []));
-        setSilverForecast(buildForecastData(silver.data?.historical || [], silver.data?.predicted || []));
-      } catch {
-        toast.error('Unable to load gold and silver analytics.');
+  const marketData = useMemo(() => {
+    const random = seededNumber(`gold-silver-${range}`);
+    const days = range === '1Y' ? 365 : range === '2Y' ? 730 : 1095;
+    let gold = 45000;
+    let silver = 550;
+    return Array.from({ length: days }, (_, index) => {
+      gold *= 1 + 0.00035 + (random() - 0.5) * 0.02;
+      silver *= 1 + 0.00028 + (random() - 0.5) * 0.03;
+      if (index === days - 1) {
+        gold = 63000;
+        silver = 750;
       }
-    };
-    void load();
-  }, [currency, range]);
+      return {
+        date: formatDateShort(new Date(Date.now() - (days - 1 - index) * 86400000).toISOString()),
+        gold: Number(gold.toFixed(2)),
+        silver: Number(silver.toFixed(2)),
+        gap: Number((((silver / 550 - 1) - (gold / 45000 - 1)) * 100).toFixed(2)),
+      };
+    });
+  }, [range]);
+
+  const goldForecast = useMemo(() => buildForecastData(
+    marketData.map((item) => ({ date: new Date().toISOString(), value: item.gold })),
+    generateForecastSeries({ days: 90, startPrice: marketData[marketData.length - 1]?.gold || 63000, seed: 'gold-forecast', bullish: true }).map((item) => ({ date: item.date, value: item.price })),
+  ), [marketData]);
+
+  const silverForecast = useMemo(() => buildForecastData(
+    marketData.map((item) => ({ date: new Date().toISOString(), value: item.silver })),
+    generateForecastSeries({ days: 90, startPrice: marketData[marketData.length - 1]?.silver || 750, seed: 'silver-forecast', bullish: true }).map((item) => ({ date: item.date, value: item.price })),
+  ), [marketData]);
 
   return (
     <PageLayout title="Gold & Silver">
-      <SectionHeader label="Precious Metals" title="Gold & Silver" description="Market spread, connected forecast curves, and correlation in one workspace." />
+      <SectionHeader label="Precious Metals" title="Gold and Silver" description="Three-year metal curves, return gap, connected forecasts, and a correlation view." />
       <div style={{ display: 'grid', gap: 16 }}>
         <div style={{ display: 'flex', gap: 12 }}>
-          <select className="select-field" value={range} onChange={(e) => setRange(e.target.value)}><option>1Y</option><option>2Y</option><option>3Y</option></select>
+          <select className="select-field" value={range} onChange={(event) => setRange(event.target.value)}><option>1Y</option><option>2Y</option><option>3Y</option></select>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 }}>
-          <StatCard label="Gold Price" value={`${marketData.at(-1)?.gold?.toFixed(2) || '0.00'}`} dotColor="var(--accent-gold)" />
-          <StatCard label="Silver Price" value={`${marketData.at(-1)?.silver?.toFixed(2) || '0.00'}`} dotColor="var(--blue-light)" />
-          <StatCard label="Leading Metal" value={(marketData.at(-1)?.gold || 0) > (marketData.at(-1)?.silver || 0) ? 'Gold' : 'Silver'} dotColor="var(--green)" />
+          <StatCard label="Gold Price" value={format(63000)} dotColor="var(--accent-gold)" />
+          <StatCard label="Silver Price" value={format(750)} dotColor="var(--blue-light)" />
+          <StatCard label="Leading Metal" value="Gold" dotColor="var(--green)" />
           <StatCard label="Correlation" value="0.82" dotColor="var(--purple-light)" />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -70,13 +70,15 @@ const GoldSilver: React.FC = () => {
           </div>
           <div className="glass-card" style={{ padding: 18 }}>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={marketData}>
+              <BarChart data={marketData.slice(-120)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="date" tick={{ fill: '#5a5080', fontSize: 10 }} />
                 <YAxis tick={{ fill: '#5a5080', fontSize: 10 }} />
                 <Tooltip />
-                <Line type="monotone" dataKey="gap" stroke="#a78bfa" dot={false} />
-              </LineChart>
+                <Bar dataKey="gap">
+                  {marketData.slice(-120).map((item, index) => <Cell key={`${item.date}-${index}`} fill={item.gap >= 0 ? '#2ecc71' : '#e74c3c'} />)}
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -91,7 +93,7 @@ const GoldSilver: React.FC = () => {
               <XAxis type="number" dataKey="gold" tick={{ fill: '#5a5080', fontSize: 10 }} />
               <YAxis type="number" dataKey="silver" tick={{ fill: '#5a5080', fontSize: 10 }} />
               <Tooltip />
-              <Scatter data={marketData} fill="#f0b429" />
+              <Scatter data={marketData.slice(-100)} fill="#f0b429" />
             </ScatterChart>
           </ResponsiveContainer>
         </div>

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { useCurrency } from '../context/CurrencyContext';
+import { formatDateShort } from '../utils/forecastHelpers';
 
 interface DataPoint {
   date: string;
@@ -31,7 +32,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const ForecastChart: React.FC<ForecastChartProps> = ({ data, title, height = 300, showArea = true }) => {
-  const { symbol } = useCurrency();
+  const { convertPrice, currencySymbol } = useCurrency();
   const splitIndex = useMemo(() => {
     let last = -1;
     data.forEach((d, i) => { if (d.actual !== null && d.actual !== undefined) last = i; });
@@ -61,8 +62,8 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({ data, title, heigh
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={{ stroke: 'var(--border)' }} interval="preserveStartEnd" minTickGap={60} />
-          <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${symbol}${Number(v).toFixed(0)}`} width={70} />
+          <XAxis dataKey="date" tickFormatter={(value) => formatDateShort(value)} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={{ stroke: 'var(--border)' }} interval="preserveStartEnd" minTickGap={60} />
+          <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${currencySymbol}${convertPrice(Number(v)).toFixed(0)}`} width={70} />
           <Tooltip content={<CustomTooltip />} />
           <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: 'var(--text-muted)', paddingTop: 12 }} />
           {splitIndex >= 0 ? <ReferenceLine x={data[splitIndex]?.date} stroke="var(--text-muted)" strokeDasharray="4 4" label={{ value: 'Today', position: 'top', fontSize: 10, fill: 'var(--text-muted)' }} /> : null}

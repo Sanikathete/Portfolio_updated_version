@@ -5,24 +5,22 @@ import { useCurrency } from '../context/CurrencyContext';
 import { usePortfolio } from '../context/PortfolioContext';
 import axios from '../api/axios';
 
-interface Portfolio {
-  id: number;
-  name: string;
-}
-
 export const Header: React.FC = () => {
   const { isAuthenticated, logout, username } = useAuth();
   const { currency, setCurrency } = useCurrency();
-  const { activePortfolioId, setActivePortfolioId } = usePortfolio();
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+  const { selectedPortfolioId, setSelectedPortfolioId, portfolios, setPortfolios } = usePortfolio();
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    axios.get('/api/portfolio/list/').then((response) => {
-      const data = Array.isArray(response.data) ? response.data : [];
-      setPortfolios(data);
+    axios.get('/api/portfolio/').then((response) => {
+      const data = response.data?.results || response.data || [];
+      const list = Array.isArray(data) ? data : [];
+      setPortfolios(list);
+      if (!selectedPortfolioId && list[0]?.id) {
+        setSelectedPortfolioId(list[0].id);
+      }
     }).catch(() => {});
-  }, [isAuthenticated, activePortfolioId]);
+  }, [isAuthenticated, selectedPortfolioId, setPortfolios, setSelectedPortfolioId]);
 
   return (
     <header
@@ -80,8 +78,8 @@ export const Header: React.FC = () => {
             {portfolios.length > 0 ? (
               <select
                 className="select-field"
-                value={activePortfolioId || ''}
-                onChange={(event) => setActivePortfolioId(Number(event.target.value) || null)}
+                value={selectedPortfolioId || ''}
+                onChange={(event) => setSelectedPortfolioId(Number(event.target.value) || null)}
                 style={{ fontSize: 11, padding: '4px 8px' }}
               >
                 <option value="">Select Portfolio</option>
@@ -99,7 +97,7 @@ export const Header: React.FC = () => {
               onChange={(event) => setCurrency(event.target.value as Currency)}
               style={{ fontSize: 11, padding: '4px 8px' }}
             >
-              {(['INR', 'USD', 'EUR', 'GBP'] as Currency[]).map((item) => (
+              {(['INR', 'USD', 'EUR'] as Currency[]).map((item) => (
                 <option key={item} value={item}>
                   {item}
                 </option>
@@ -159,7 +157,7 @@ const LiveTickerMini: React.FC = () => {
             <span key={`${stock.symbol}-${index}`} style={{ marginRight: 28, fontSize: 11, color: 'var(--text-muted)' }}>
               <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{stock.symbol}</span>{' '}
               <span style={{ color: change >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                {change >= 0 ? 'UP' : 'DN'} {Math.abs(change).toFixed(2)}%
+                {change >= 0 ? '+' : '-'} {Math.abs(change).toFixed(2)}%
               </span>
             </span>
           );

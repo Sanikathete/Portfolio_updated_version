@@ -5,7 +5,7 @@ import { AuthProvider, ProtectedRoute } from './context/AuthContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import { PortfolioProvider } from './context/PortfolioContext';
 import { Header } from './components/Header';
-import { AIWidget } from './components/AIWidget';
+import { ChatWidget } from './components/ChatWidget';
 import './styles/globals.css';
 
 const Home = React.lazy(() => import('./pages/Home'));
@@ -63,7 +63,7 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
-            <AIWidget />
+            <ChatWidget />
             <Toaster position="top-right" toastOptions={{ duration: 3500, style: { background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }, success: { iconTheme: { primary: 'var(--green)', secondary: 'var(--bg-card)' } }, error: { iconTheme: { primary: 'var(--red)', secondary: 'var(--bg-card)' } } }} />
           </PortfolioProvider>
         </CurrencyProvider>

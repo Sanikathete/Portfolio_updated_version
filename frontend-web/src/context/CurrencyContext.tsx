@@ -1,55 +1,65 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
-export type Currency = 'INR' | 'USD' | 'EUR' | 'GBP';
+export type Currency = 'INR' | 'USD' | 'EUR';
 
 const RATES: Record<Currency, number> = {
   INR: 1,
   USD: 0.012,
   EUR: 0.011,
-  GBP: 0.0095,
 };
 
 const SYMBOLS: Record<Currency, string> = {
-  INR: '₹', USD: '$', EUR: '€', GBP: '£'
+  INR: 'Rs ',
+  USD: '$',
+  EUR: 'EUR ',
 };
 
 interface CurrencyCtx {
   currency: Currency;
-  setCurrency: (c: Currency) => void;
-  convert: (inrValue: number) => number;
-  format: (inrValue: number, decimals?: number) => string;
+  setCurrency: (currency: Currency) => void;
+  convertPrice: (priceInINR: number) => number;
+  currencySymbol: string;
+  convert: (priceInINR: number) => number;
+  format: (priceInINR: number, decimals?: number) => string;
   symbol: string;
 }
 
 const CurrencyContext = createContext<CurrencyCtx>({} as CurrencyCtx);
 
 export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
-  const [currency, setCurrency] = useState<Currency>(
-    (localStorage.getItem('currency') as Currency) || 'INR'
+  const [currency, setCurrencyState] = useState<Currency>(
+    (localStorage.getItem('currency') as Currency) || 'INR',
   );
 
-  const handleSetCurrency = (c: Currency) => {
-    setCurrency(c);
-    localStorage.setItem('currency', c);
+  const setCurrency = (nextCurrency: Currency) => {
+    setCurrencyState(nextCurrency);
+    localStorage.setItem('currency', nextCurrency);
   };
 
-  const convert = useCallback((v: number) => v * RATES[currency], [currency]);
+  const convertPrice = (priceInINR: number) => priceInINR * RATES[currency];
 
-  const format = useCallback((v: number, decimals = 2) => {
-    const converted = v * RATES[currency];
-    const symbol = SYMBOLS[currency];
-    if (converted >= 1e7) return `${symbol}${(converted / 1e7).toFixed(2)}Cr`;
-    if (converted >= 1e5) return `${symbol}${(converted / 1e5).toFixed(2)}L`;
-    if (converted >= 1e3) return `${symbol}${(converted / 1e3).toFixed(1)}K`;
-    return `${symbol}${converted.toFixed(decimals)}`;
+  const format = useMemo(() => {
+    return (priceInINR: number, decimals = 2) => {
+      const converted = convertPrice(priceInINR);
+      return `${SYMBOLS[currency]}${converted.toFixed(decimals)}`;
+    };
   }, [currency]);
 
-  return (
-    <CurrencyContext.Provider value={{ currency, setCurrency: handleSetCurrency, convert, format, symbol: SYMBOLS[currency] }}>
-      {children}
-    </CurrencyContext.Provider>
+  const value = useMemo(
+    () => ({
+      currency,
+      setCurrency,
+      convertPrice,
+      currencySymbol: SYMBOLS[currency],
+      convert: convertPrice,
+      format,
+      symbol: SYMBOLS[currency],
+    }),
+    [currency, format],
   );
+
+  return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;
 };
 
 export const useCurrency = () => useContext(CurrencyContext);

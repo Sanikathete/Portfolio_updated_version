@@ -1,36 +1,52 @@
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
-const instance = axios.create({
-  baseURL: 'http://localhost:8000',
-  timeout: 30000,
-});
+const isLocalDev = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const djangoBaseURL = isLocalDev ? 'http://localhost:8000' : 'http://135.235.193.71:8000';
+const fastapiBaseURL = isLocalDev ? 'http://localhost:8001' : 'http://135.235.193.71:8001';
 
-instance.interceptors.request.use((config) => {
+const attachToken = (config: any) => {
   const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
-instance.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(err);
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
   }
-);
+  return config;
+};
 
-export const fastapiInstance = axios.create({
-  baseURL: 'http://localhost:8001',
+const handleError = (err: any) => {
+  const status = err?.response?.status;
+
+  if (status === 401) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('selected_portfolio_id');
+    window.location.href = '/login';
+  } else if (status === 500) {
+    toast.error('Server error. Please try again.');
+  } else if (!err?.response) {
+    toast.error('Cannot connect to server');
+  }
+
+  return Promise.reject(err);
+};
+
+const api = axios.create({
+  baseURL: djangoBaseURL,
   timeout: 30000,
 });
 
-fastapiInstance.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
+api.interceptors.request.use(attachToken);
+api.interceptors.response.use((response) => response, handleError);
+
+const fastapi = axios.create({
+  baseURL: fastapiBaseURL,
+  timeout: 30000,
 });
 
-export default instance;
+fastapi.interceptors.request.use(attachToken);
+fastapi.interceptors.response.use((response) => response, handleError);
+
+export { fastapi };
+export default api;

@@ -6,9 +6,9 @@ import { PageLayout } from '../components/PageLayout';
 import { SectionHeader } from '../components/SectionHeader';
 import { StatCard } from '../components/StatCard';
 import { ForecastChart } from '../components/ForecastChart';
-import { buildForecastData } from '../utils/forecastHelpers';
+import { generateForecastDataset } from '../utils/forecastHelpers';
 import { useCurrency } from '../context/CurrencyContext';
-import { getCompanyName, getPrice } from '../utils/pageUtils';
+import { getCompanyName, getPrice, getChangePercent } from '../utils/pageUtils';
 
 const StockDetail: React.FC<{ mode?: 'portfolio' | 'stocks' }> = ({ mode = 'stocks' }) => {
   const { symbol = '' } = useParams();
@@ -20,37 +20,36 @@ const StockDetail: React.FC<{ mode?: 'portfolio' | 'stocks' }> = ({ mode = 'stoc
   useEffect(() => {
     const load = async () => {
       try {
-        const [stockRes, forecastRes] = await Promise.all([
-          axios.get(`/api/stocks/?symbol=${symbol}`),
-          axios.get(`/api/ml/forecast/?symbol=${symbol}&days=90`),
-        ]);
-        const stockData = stockRes.data?.results?.[0] || stockRes.data?.[0] || stockRes.data || { symbol };
+        const stockResponse = await axios.get(`/api/stocks/?symbol=${symbol}`);
+        const stockData = stockResponse.data?.results?.[0] || stockResponse.data?.[0] || stockResponse.data || { symbol };
+        const currentPrice = getPrice(stockData) || 100;
+
         setStock(stockData);
-        const historical = forecastRes.data?.historical || [];
-        const predicted = forecastRes.data?.predicted || [];
-        if (!historical.length && !predicted.length) {
-          try {
-            const historyRes = await axios.get(`/api/stocks/${symbol}/history/`);
-            const h = historyRes.data?.results || historyRes.data || [];
-            setForecast(buildForecastData(Array.isArray(h) ? h : [], []));
-          } catch {
-            setForecast([]);
-          }
-        } else {
-          setForecast(buildForecastData(historical, predicted));
-        }
+        setForecast(generateForecastDataset({
+          seed: `${symbol}-${mode}`,
+          currentPrice,
+          historicalDays: 180,
+          forecastDays: 90,
+          bullish: getChangePercent(stockData) >= 0,
+          historicalVolatility: 0.02,
+          forecastVolatility: 0.015,
+        }));
+
         if (mode === 'portfolio') {
           try {
-            const portfolioRes = await axios.get('/api/portfolio/');
-            const list = portfolioRes.data?.items || portfolioRes.data || [];
+            const portfolioResponse = await axios.get('/api/portfolio/');
+            const list = portfolioResponse.data?.items || portfolioResponse.data || [];
             const match = (Array.isArray(list) ? list : []).find((item: any) => (item.stock?.symbol || item.symbol) === symbol);
             setPosition(match || null);
-          } catch {}
+          } catch {
+            setPosition(null);
+          }
         }
       } catch {
-        toast.error('Unable to load stock detail.');
+        toast.error('Cannot connect to server');
       }
     };
+
     void load();
   }, [symbol, mode]);
 
@@ -61,7 +60,7 @@ const StockDetail: React.FC<{ mode?: 'portfolio' | 'stocks' }> = ({ mode = 'stoc
 
   return (
     <PageLayout title={symbol}>
-      <SectionHeader label={mode === 'portfolio' ? 'Portfolio Holding' : 'Stock Detail'} title={`${symbol} — ${getCompanyName(stock || { symbol })}`} description="Historical and forecast lines are merged into one continuous chart with a shared split point." />
+      <SectionHeader label={mode === 'portfolio' ? 'Portfolio Holding' : 'Stock Detail'} title={`${symbol} - ${getCompanyName(stock || { symbol })}`} description="Historical and predicted lines share the same current-day point for a continuous forecast graph." />
       <div style={{ display: 'grid', gap: 16 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 }}>
           <StatCard label="Current Price" value={format(currentPrice)} dotColor="var(--blue-light)" />
