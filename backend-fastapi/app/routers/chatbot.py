@@ -252,40 +252,40 @@ def get_stocks_by_sector(stocks: list, sector_keyword: str):
 # QUESTION TYPE DETECTOR  (14 types + greeting)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def detect_question_type(message: str):
+def detect_question_type(message: str) -> str:
     msg = message.lower()
 
-    greeting_kw      = ["hello", "hi", "hey", "who are you", "what can you do", "help", "thanks", "thank you", "good morning", "good evening"]
-    avoid_kw         = ["not buy", "avoid", "should not buy", "shouldn't buy", "stay away", "risky", "bad stock", "which stock not", "dangerous stock"]
-    compare_kw       = ["compare", "vs", "versus", "better stock", "which is better", "difference between"]
-    portfolio_kw     = ["my portfolio", "analyze portfolio", "portfolio analysis", "diversify", "my investments", "rebalance", "asset allocation"]
-    longterm_kw      = ["long term", "long-term", "5 years", "10 years", "retirement", "wealth creation", "hold for", "future investment"]
-    shortterm_kw     = ["short term", "short-term", "quick profit", "intraday", "swing trade", "this week", "this month", "fast returns"]
-    dividend_kw      = ["dividend", "passive income", "dividend yield", "dividend stock", "regular income"]
-    ipo_kw           = ["ipo", "new listing", "upcoming ipo", "apply for ipo", "grey market"]
-    news_kw          = ["news", "latest", "recent", "update", "today", "market today", "what happened", "market news", "headline"]
-    buy_kw           = ["buy", "invest", "purchase", "should i", "good stock", "best stock", "recommend", "suggest", "which stock", "worth buying", "good investment"]
-    sell_kw          = ["sell", "exit", "should i sell", "when to sell", "book profit", "stop loss"]
-    sector_kw        = ["sector", "it stocks", "banking stocks", "pharma", "auto stocks", "fmcg", "energy", "real estate", "infrastructure", "healthcare"]
-    info_kw          = ["what is", "explain", "tell me about", "p/e", "ratio", "market cap", "ipo", "nse", "bse", "demat", "sensex", "nifty", "mutual fund", "sip", "etf", "how does", "what are"]
-    price_kw         = ["price", "current price", "stock price", "how much", "trading at", "rate", "live price"]
-    watchlist_kw     = ["my watchlist", "watchlist stocks", "stocks i am watching", "add to watchlist", "remove from watchlist"]
+    greeting_kw = ["hello", "hi", "hey", "good morning", "good evening", "who are you", "what can you do", "how does this work"]
+    compare_kw = ["compare", " vs ", "versus", "which is better", "better between"]
+    portfolio_kw = ["my portfolio", "portfolio analysis", "my profit", "my loss", "rebalance", "my stocks", "how is my portfolio"]
+    watchlist_kw = ["my watchlist", "show watchlist", "add to watchlist", "remove from watchlist"]
+    dividend_kw = ["dividend", "dividend yield", "dividend paying", "regular dividend"]
+    ipo_kw = ["ipo", "initial public offering", "upcoming ipo", "new listing", "new ipo"]
+    risk_kw = ["avoid", "risky stock", "overvalued", "stay away", "stocks in loss", "which stocks to avoid", "not buy", "shouldn't buy", "should not buy"]
+    buy_kw = ["buy", "invest", "purchase", "should i buy", "good stock", "best stock", "recommend", "suggest", "which stock", "stock for beginner", "safe stock", "stock under"]
+    sell_kw = ["sell", "exit", "should i sell", "when to sell", "book profit", "right time to sell"]
+    shortterm_kw = ["short term", "swing trading", "intraday", "quick profit", "short term trading", "swing trade"]
+    longterm_kw = ["long term", "5 years", "10 years", "hold for", "long term investment", "best returns in 1 year", "hold long"]
+    sector_kw = ["sector", "it stocks", "banking stocks", "pharma", "auto stocks", "fmcg", "energy stocks", "top stocks in", "best stocks in"]
+    news_kw = ["news", "market news", "what happened", "market today", "market update", "why is", "falling", "rising"]
+    price_kw = ["price", "current price", "stock price", "how much", "52 week", "market cap", "pe ratio", "p/e ratio"]
+    info_kw = ["what is", "explain", "tell me about", "who is", "what does", "define"]
 
-    if any(re.search(r'\b' + re.escape(k) + r'\b', msg) for k in greeting_kw):      return "greeting"
-    if any(k in msg for k in avoid_kw):         return "avoid_advice"
-    if any(k in msg for k in compare_kw):       return "compare_stocks"
-    if any(k in msg for k in portfolio_kw):     return "portfolio_analysis"
-    if any(k in msg for k in watchlist_kw):     return "watchlist_query"
-    if any(k in msg for k in longterm_kw):      return "longterm_advice"
-    if any(k in msg for k in shortterm_kw):     return "shortterm_advice"
-    if any(k in msg for k in dividend_kw):      return "dividend_query"
-    if any(k in msg for k in ipo_kw):           return "ipo_query"
-    if any(k in msg for k in buy_kw):           return "buy_advice"
-    if any(k in msg for k in sell_kw):          return "sell_advice"
-    if any(k in msg for k in sector_kw):        return "sector_query"
-    if any(k in msg for k in news_kw):          return "market_news"
-    if any(k in msg for k in info_kw):          return "general_info"
-    if any(k in msg for k in price_kw):         return "price_query"
+    if any(k in msg for k in greeting_kw):      return "greeting"
+    if any(k in msg for k in compare_kw):        return "compare_stocks"
+    if any(k in msg for k in portfolio_kw):      return "portfolio_analysis"
+    if any(k in msg for k in watchlist_kw):      return "watchlist_query"
+    if any(k in msg for k in dividend_kw):       return "dividend_query"
+    if any(k in msg for k in ipo_kw):            return "ipo_query"
+    if any(k in msg for k in risk_kw):           return "avoid_advice"
+    if any(k in msg for k in buy_kw):            return "buy_advice"
+    if any(k in msg for k in sell_kw):           return "sell_advice"
+    if any(k in msg for k in shortterm_kw):      return "shortterm_advice"
+    if any(k in msg for k in longterm_kw):       return "longterm_advice"
+    if any(k in msg for k in sector_kw):         return "sector_query"
+    if any(k in msg for k in news_kw):           return "market_news"
+    if any(k in msg for k in price_kw):          return "price_query"
+    if any(k in msg for k in info_kw):           return "general_info"
     return "general"
 
 
@@ -405,7 +405,7 @@ Instructions:
 
     elif question_type == "avoid_advice":
         sample_text = "\n".join([
-            f"- {s.get('symbol')} | {s.get('name')} | ₹{s.get('current_price')} | {s.get('sector')}"
+            f"- {s.get('symbol')} | {s.get('name')} | {'₹' if s.get('exchange','').upper() == 'NSE' else '$'}{s.get('current_price')} | {s.get('sector')} | {s.get('exchange','NSE')}"
             for s in stocks[:20]
         ])
         prompt = f"""User asked: {message}
@@ -422,7 +422,7 @@ Instructions:
     elif question_type == "buy_advice":
         sample_stocks = pgvector_results if pgvector_results else stocks[:20]
         sample_text = "\n".join([
-            f"- {s.get('symbol')} | {s.get('name')} | ₹{s.get('current_price')} | {s.get('sector')}"
+            f"- {s.get('symbol')} | {s.get('name')} | {'₹' if s.get('exchange','').upper() == 'NSE' else '$'}{s.get('current_price')} | {s.get('sector')} | {s.get('exchange','NSE')}"
             for s in sample_stocks
         ])
         prompt = f"""User asked: {message}
@@ -499,7 +499,7 @@ Instructions:
     elif question_type == "longterm_advice":
         sample_stocks = pgvector_results if pgvector_results else stocks[:20]
         sample_text   = "\n".join([
-            f"- {s.get('symbol')} | {s.get('name')} | ₹{s.get('current_price')} | {s.get('sector')}"
+            f"- {s.get('symbol')} | {s.get('name')} | {'₹' if s.get('exchange','').upper() == 'NSE' else '$'}{s.get('current_price')} | {s.get('sector')} | {s.get('exchange','NSE')}"
             for s in sample_stocks
         ])
         prompt = f"""User asked: {message}
@@ -516,47 +516,54 @@ Instructions:
 
     elif question_type == "shortterm_advice":
         sample_stocks = pgvector_results if pgvector_results else stocks[:20]
-        sample_text   = "\n".join([
-            f"- {s.get('symbol')} | {s.get('name')} | ₹{s.get('current_price')} | {s.get('sector')}"
+        sample_text = "\n".join([
+            f"- {s.get('symbol')} | {s.get('name')} | {'₹' if s.get('exchange','').upper() == 'NSE' else '$'}{s.get('current_price')} | {s.get('sector')} | {s.get('exchange','NSE')}"
             for s in sample_stocks
         ])
         prompt = f"""User asked: {message}
 
-Stocks from database:
+Available stocks:
 {sample_text}
 
 Instructions:
-- Explain short term trading risks clearly
-- Mention intraday vs swing trading concepts
-- Warn about volatility and emotional trading
-- Add strong disclaimer: Short term trading is risky. This is not financial advice."""
+- Suggest 3-4 stocks suitable for short term trading or swing trading
+- Mention typical holding period (days to weeks)
+- Explain what makes a stock good for short term trading (volume, volatility, momentum)
+- Warn about higher risk in short term trading
+- Add disclaimer: This is not financial advice. Please consult a SEBI-registered advisor."""
 
     elif question_type == "dividend_query":
         sample_stocks = pgvector_results if pgvector_results else stocks[:20]
-        sample_text   = "\n".join([
-            f"- {s.get('symbol')} | {s.get('name')} | ₹{s.get('current_price')} | {s.get('sector')}"
+        sample_text = "\n".join([
+            f"- {s.get('symbol')} | {s.get('name')} | {'₹' if s.get('exchange','').upper() == 'NSE' else '$'}{s.get('current_price')} | {s.get('sector')} | {s.get('exchange','NSE')}"
             for s in sample_stocks
         ])
         prompt = f"""User asked: {message}
 
-Stocks from database:
+Available stocks:
 {sample_text}
 
 Instructions:
-- Explain dividend investing and dividend yield concept
-- Suggest sectors known for good dividends (FMCG, Utilities, PSU banks)
-- Mention 2-3 stocks from the list that are typically dividend paying
-- Add disclaimer: This is not financial advice."""
+- Explain what dividend yield means
+- Suggest sectors known for good dividends (FMCG, PSU banks, utilities)
+- Mention 3-4 stocks from the list that are typically known for dividends
+- Explain how to check dividend history
+- Add disclaimer: This is not financial advice. Please consult a SEBI-registered advisor."""
 
     elif question_type == "ipo_query":
         prompt = f"""User asked: {message}
 
 Instructions:
-- Explain what an IPO is in simple terms
-- Explain how to apply for an IPO in India (ASBA method, UPI method)
-- Mention that StockSphere tracks NSE-listed stocks post-listing
-- Advise checking SEBI-registered platforms for upcoming IPO calendar
-- Add disclaimer: This is not financial advice."""
+- Answer questions about IPOs in India or US
+- Explain what an IPO is if needed
+- Mention that for latest upcoming IPOs users should check:
+  1. NSE website: https://www.nseindia.com
+  2. SEBI website: https://www.sebi.gov.in
+  3. Financial news sites like Moneycontrol, Economic Times
+- Do NOT suggest random stocks as IPO recommendations
+- Give general advice on how to evaluate and apply for IPOs
+- Mention risks of IPO investing
+- Add disclaimer: This is not financial advice. Please consult a SEBI-registered advisor."""
 
     elif question_type == "portfolio_analysis":
         prompt = f"""User asked: {message}
