@@ -34,20 +34,25 @@ const marketSectors: Record<string, string[]> = {
 };
 
 const niftySectorToDbSectors: Record<string, string[]> = {
-  'Nifty Auto': ['Automobile and Auto Components'],
-  'Nifty Bank': ['Financial Services'],
-  'Nifty Commodities': ['Metals & Mining', 'Chemicals', 'Oil Gas & Consumable Fuels'],
+  'Nifty Auto': ['Automobile and Auto Components', 'Auto', 'Automobile'],
+  'Nifty Bank': ['Financial Services', 'Banking', 'Finance'],
+  'Nifty Commodities': ['Metals & Mining', 'Chemicals', 'Oil Gas & Consumable Fuels', 'Metals', 'Commodities'],
   'Nifty CPSE': ['Power', 'Capital Goods'],
-  'Nifty Energy': ['Oil Gas & Consumable Fuels', 'Power'],
-  'Nifty FMCG': ['Fast Moving Consumer Goods'],
-  'Nifty IT': ['Information Technology'],
-  'Nifty Media': ['Consumer Services'],
-  'Nifty Metal': ['Metals & Mining'],
+  'Nifty Energy': ['Oil Gas & Consumable Fuels', 'Power', 'Energy', 'Oil & Gas'],
+  'Nifty FMCG': ['Fast Moving Consumer Goods', 'FMCG', 'Consumer Goods'],
+  'Nifty IT': ['Information Technology', 'IT', 'Technology', 'Tech'],
+  'Nifty Media': ['Consumer Services', 'Media'],
+  'Nifty Metal': ['Metals & Mining', 'Metals', 'Metal'],
   'Nifty MNC': ['Consumer Durables', 'Consumer Services'],
-  'Nifty Pharma': ['Healthcare'],
+  'Nifty Pharma': ['Healthcare', 'Pharma', 'Pharmaceuticals'],
   'Nifty PSE': ['Power', 'Capital Goods'],
-  'Nifty PSU Bank': ['Financial Services'],
-  'Nifty Realty': ['Realty', 'Construction', 'Construction Materials'],
+  'Nifty PSU Bank': ['Financial Services', 'Banking', 'Finance'],
+  'Nifty Realty': ['Realty', 'Construction', 'Construction Materials', 'Real Estate'],
+};
+
+const matchesSector = (stock: any, sectorAliases: string[]) => {
+  const sector = String(stock?.sector || '').toLowerCase();
+  return sectorAliases.some((alias) => sector.includes(alias.toLowerCase()));
 };
 
 const Dashboard: React.FC = () => {
@@ -79,17 +84,10 @@ const Dashboard: React.FC = () => {
   };
 
   const fetchStocks = async () => {
-    const all: any[] = [];
-    let offset = 0;
-    const limit = 100;
-    while (true) {
-      const response = await axios.get(`/api/stocks/?limit=${limit}&offset=${offset}`);
-      const data = response.data?.results || response.data || [];
-      const page = Array.isArray(data) ? data : [];
-      all.push(...page);
-      if (page.length < limit) break;
-      offset += limit;
-    }
+    const response = await axios.get('/api/stocks/public-stocks/');
+    const data = response.data?.results || response.data || [];
+    const all = Array.isArray(data) ? data : [];
+
     setStocks(all.length ? all : INDIAN_STOCKS);
     if (!form.stockSymbol && all[0]?.symbol) {
       setForm((current) => ({ ...current, stockSymbol: all[0].symbol }));
@@ -138,17 +136,15 @@ const Dashboard: React.FC = () => {
     const dbSectors = niftySectorToDbSectors[form.marketSector];
     if (!dbSectors) return stocks;
 
-    const filtered = stocks.filter((stock) => {
-      const sector = (stock.sector || '').toLowerCase();
-      return dbSectors.some((s) => sector.includes(s.toLowerCase()));
-    });
-
-    return filtered.length ? filtered : stocks;
+    return stocks.filter((stock) => matchesSector(stock, dbSectors));
   }, [stocks, form.marketSector, form.country]);
 
   useEffect(() => {
-    if (!form.stockSymbol && filteredStocks[0]?.symbol) {
-      setForm((current) => ({ ...current, stockSymbol: filteredStocks[0].symbol }));
+    const stillValid = filteredStocks.some((stock) => stock.symbol === form.stockSymbol);
+    const nextSymbol = stillValid ? form.stockSymbol : filteredStocks[0]?.symbol || '';
+
+    if (nextSymbol !== form.stockSymbol) {
+      setForm((current) => ({ ...current, stockSymbol: nextSymbol }));
     }
   }, [filteredStocks, form.stockSymbol]);
 
@@ -214,12 +210,16 @@ const Dashboard: React.FC = () => {
       return;
     }
 
+    if (!form.stockSymbol) {
+      toast.error('No stocks are available for the selected sector.');
+      return;
+    }
+
     setAdding(true);
     try {
-      await axios.post('/api/portfolio/', {
+      await axios.post(`/api/portfolio/${selectedPortfolioId}/add_stock/`, {
         stock_symbol: form.stockSymbol,
         quantity: form.quantity,
-        portfolio_id: selectedPortfolioId,
       });
       await fetchHoldings(selectedPortfolioId);
       toast.success('Stock added');
@@ -275,9 +275,13 @@ const Dashboard: React.FC = () => {
             <div className="glass-card" style={{ padding: 14 }}>
               <div style={{ color: 'var(--accent-gold)', marginBottom: 8 }}>04 Select Stock</div>
               <select className="select-field" value={form.stockSymbol} onChange={(event) => setForm((current) => ({ ...current, stockSymbol: event.target.value }))} style={{ width: '100%' }}>
-                {filteredStocks.map((stock) => (
-                  <option key={stock.id || stock.symbol} value={stock.symbol}>{stock.symbol} - {getCompanyName(stock)}</option>
-                ))}
+                {!filteredStocks.length ? (
+                  <option value="">No stocks available for this sector</option>
+                ) : (
+                  filteredStocks.map((stock) => (
+                    <option key={stock.id || stock.symbol} value={stock.symbol}>{stock.symbol} - {getCompanyName(stock)}</option>
+                  ))
+                )}
               </select>
             </div>
 
