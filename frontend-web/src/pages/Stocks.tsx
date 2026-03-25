@@ -15,8 +15,9 @@ interface Stock {
 }
 
 const STOCKS_ENDPOINT = 'http://135.235.193.71:8000/api/stocks/public-stocks/';
-const WATCHLIST_ENDPOINT = 'http://135.235.193.71:8000/watchlist/';
-const WATCHLIST_ADD_ENDPOINT = 'http://135.235.193.71:8000/watchlist/add';
+const WATCHLIST_ENDPOINT = 'http://135.235.193.71:8000/api/watchlist/watchlist/';
+const WATCHLIST_ADD_ENDPOINT = 'http://135.235.193.71:8000/api/watchlist/watchlist/add';
+const PORTFOLIO_ENDPOINT = 'http://135.235.193.71:8000/api/portfolio/';
 const SERVICE_USERNAME = 'testteacher';
 const SERVICE_PASSWORD = 'teacher@123';
 const NIFTY_SECTORS = [
@@ -70,20 +71,27 @@ const Stocks: React.FC = () => {
 
       try {
         const response = await axios.get<Stock[]>(STOCKS_ENDPOINT, {
-          params: {
-            username: SERVICE_USERNAME,
-            password: SERVICE_PASSWORD,
-          },
+          withCredentials: true,
         });
 
         const data = Array.isArray(response.data) ? response.data : [];
         setStocks(data);
+      } catch {
+        setError('Unable to load NSE stocks right now. Please try again shortly.');
+        setStocks([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    void loadStocks();
+  }, []);
+
+  useEffect(() => {
+    const loadWatchlist = async () => {
+      try {
         const watchlistResponse = await axios.get(WATCHLIST_ENDPOINT, {
-          params: {
-            username: SERVICE_USERNAME,
-            password: SERVICE_PASSWORD,
-          },
+          withCredentials: true,
         });
 
         const watchlistItems = Array.isArray(watchlistResponse.data?.items) ? watchlistResponse.data.items : [];
@@ -93,15 +101,25 @@ const Stocks: React.FC = () => {
 
         setWatchlistedSymbols(new Set(symbols));
       } catch {
-        setError('Unable to load NSE stocks right now. Please try again shortly.');
-        setStocks([]);
         setWatchlistedSymbols(new Set());
-      } finally {
-        setLoading(false);
       }
     };
 
-    void loadStocks();
+    void loadWatchlist();
+  }, []);
+
+  useEffect(() => {
+    const loadPortfolio = async () => {
+      try {
+        await axios.get(PORTFOLIO_ENDPOINT, {
+          withCredentials: true,
+        });
+      } catch {
+        // Silent by design: portfolio may require login
+      }
+    };
+
+    void loadPortfolio();
   }, []);
 
   const filteredStocks = useMemo(() => {

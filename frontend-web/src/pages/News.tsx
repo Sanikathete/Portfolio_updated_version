@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { PageLayout } from '../components/PageLayout';
 import { SectionHeader } from '../components/SectionHeader';
 import { SentimentBadge } from '../components/SentimentBadge';
-import { fastapi } from '../api/axios';
+import api from '../api/axios';
 
 const fallbackNews = [
   { title: 'TCS extends enterprise AI delivery pipeline', url: 'https://example.com/tcs', source: 'Market Wire', published_at: '2026-03-24', sentiment: 'Positive', summary: 'Enterprise demand remains stable and margins continue to hold.' },
@@ -20,7 +20,7 @@ const News: React.FC = () => {
   const [expanded, setExpanded] = useState<number | null>(null);
 
   useEffect(() => {
-    fastapi.get('/news/search?query=stocks').then((response) => {
+    api.get('/news/search?query=stocks').then((response) => {
       const data = response.data?.results || response.data || [];
       setArticles(Array.isArray(data) && data.length ? data : fallbackNews);
     }).catch(() => setArticles(fallbackNews));
