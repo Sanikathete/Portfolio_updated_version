@@ -1,0 +1,922 @@
+{
+  "info": {
+    "_postman_id": "f4ef6a56-6c0d-4e6d-9f3f-9d90d6a7b4e1",
+    "name": "StockSphere Django Backend",
+    "description": "Postman collection for the Django backend in StockSphere. Run the login request first to populate {{accessToken}} and {{refreshToken}}. Some requests require you to set {{portfolioId}}, {{watchlistId}}, {{stockId}}, or {{stockSymbol}} to real values from your database.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"phone\": \"{{phone}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/register/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "register",
+                ""
+              ]
+            },
+            "description": "Create a new Django user."
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.access) pm.environment.set('accessToken', data.access);",
+                  "  if (data.refresh) pm.environment.set('refreshToken', data.refresh);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/login/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "login",
+                ""
+              ]
+            },
+            "description": "Obtain JWT access and refresh tokens."
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/token/refresh/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "token",
+                "refresh",
+                ""
+              ]
+            },
+            "description": "Refresh the JWT access token."
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/users/profile/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "profile",
+                ""
+              ]
+            },
+            "description": "Fetch the authenticated user's profile."
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"email\": \"{{email}}\",\n  \"phone\": \"{{phone}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/profile/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "profile",
+                ""
+              ]
+            },
+            "description": "Update the authenticated user's profile."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stocks",
+      "item": [
+        {
+          "name": "List Stocks",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/stocks/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stocks",
+                ""
+              ]
+            },
+            "description": "List all stocks. Add DRF pagination query params if needed."
+          }
+        },
+        {
+          "name": "Get Stock Detail",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/stocks/{{stockId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stocks",
+                "{{stockId}}",
+                ""
+              ]
+            },
+            "description": "Get one stock by primary key."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Portfolio",
+      "item": [
+        {
+          "name": "List Portfolios",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/portfolio/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "portfolio",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Portfolio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.id) pm.environment.set('portfolioId', data.id);",
+                  "}",
+                  ""
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{portfolioName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/portfolio/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "portfolio",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Portfolio Detail",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/portfolio/{{portfolioId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "portfolio",
+                "{{portfolioId}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Portfolio",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{portfolioName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/portfolio/{{portfolioId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "portfolio",
+                "{{portfolioId}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Portfolio",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/api/portfolio/{{portfolioId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "portfolio",
+                "{{portfolioId}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Stock To Portfolio",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock_symbol\": \"{{stockSymbol}}\",\n  \"quantity\": 1,\n  \"buy_price\": 100.0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/portfolio/{{portfolioId}}/add_stock/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "portfolio",
+                "{{portfolioId}}",
+                "add_stock",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remove Stock From Portfolio",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock_symbol\": \"{{stockSymbol}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/portfolio/{{portfolioId}}/remove_stock/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "portfolio",
+                "{{portfolioId}}",
+                "remove_stock",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Watchlist",
+      "item": [
+        {
+          "name": "List Watchlists",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/watchlist/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "watchlist",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Watchlist",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.id) pm.environment.set('watchlistId', data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{watchlistName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/watchlist/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "watchlist",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Watchlist Detail",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/watchlist/{{watchlistId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "watchlist",
+                "{{watchlistId}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Watchlist",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{watchlistName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/watchlist/{{watchlistId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "watchlist",
+                "{{watchlistId}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Watchlist",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/api/watchlist/{{watchlistId}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "watchlist",
+                "{{watchlistId}}",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Stock To Watchlist",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock_symbol\": \"{{stockSymbol}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/watchlist/{{watchlistId}}/add_stock/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "watchlist",
+                "{{watchlistId}}",
+                "add_stock",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remove Stock From Watchlist",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock_symbol\": \"{{stockSymbol}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/watchlist/{{watchlistId}}/remove_stock/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "watchlist",
+                "{{watchlistId}}",
+                "remove_stock",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Watchlist Simple",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/watchlist/watchlist/?username={{username}}&password={{password}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "watchlist",
+                "watchlist",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "username",
+                  "value": "{{username}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}"
+                }
+              ]
+            },
+            "description": "Simple watchlist GET endpoint using username/password query params."
+          }
+        },
+        {
+          "name": "Add Stock Simple",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/watchlist/watchlist/add?username={{username}}&password={{password}}&stock_symbol={{stockSymbol}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "watchlist",
+                "watchlist",
+                "add"
+              ],
+              "query": [
+                {
+                  "key": "username",
+                  "value": "{{username}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}"
+                },
+                {
+                  "key": "stock_symbol",
+                  "value": "{{stockSymbol}}"
+                }
+              ]
+            },
+            "description": "Simple watchlist POST endpoint using username/password query params."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chatbot",
+      "item": [
+        {
+          "name": "Ask Chatbot",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"{{question}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/chatbot/ask/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chatbot",
+                "ask",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "username",
+      "value": "testteacher"
+    },
+    {
+      "key": "email",
+      "value": "testteacher@example.com"
+    },
+    {
+      "key": "phone",
+      "value": "9999999999"
+    },
+    {
+      "key": "password",
+      "value": "teacher@123"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "stockId",
+      "value": "1"
+    },
+    {
+      "key": "stockSymbol",
+      "value": "INFY"
+    },
+    {
+      "key": "portfolioId",
+      "value": "1"
+    },
+    {
+      "key": "portfolioName",
+      "value": "Postman Portfolio"
+    },
+    {
+      "key": "watchlistId",
+      "value": "1"
+    },
+    {
+      "key": "watchlistName",
+      "value": "Postman Watchlist"
+    },
+    {
+      "key": "question",
+      "value": "What is the outlook for INFY?"
+    }
+  ]
+}
