@@ -1,7 +1,7 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-const isLocalDev = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const isLocalDev = false;
 const djangoBaseURL = isLocalDev ? 'http://localhost:8000' : 'http://135.235.193.71:8000';
 const fastapiBaseURL = isLocalDev ? 'http://localhost:8001' : 'http://135.235.193.71:8001';
 

@@ -3,49 +3,45 @@ import toast from 'react-hot-toast';
 import axios from '../api/axios';
 import { PageLayout } from '../components/PageLayout';
 import { SectionHeader } from '../components/SectionHeader';
-import { SentimentBadge } from '../components/SentimentBadge';
-import { useCurrency } from '../context/CurrencyContext';
-import { usePortfolio } from '../context/PortfolioContext';
-import { getCompanyName, getSector, getPrice, getChangePercent } from '../utils/pageUtils';
+
+interface WatchlistStock {
+  id: number;
+  symbol: string;
+  name: string;
+  current_price: number;
+  sector: string;
+  exchange: string;
+  currency: string;
+}
+
+interface WatchlistItem {
+  id: number;
+  stock: WatchlistStock;
+  created_at: string;
+}
+
+const WATCHLIST_ENDPOINT = 'http://135.235.193.71:8000/watchlist/';
+const SERVICE_USERNAME = 'testteacher';
+const SERVICE_PASSWORD = 'teacher@123';
 
 const Watchlist: React.FC = () => {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const { format } = useCurrency();
-  const { selectedPortfolioId } = usePortfolio();
 
   const load = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/watchlist/');
-      const raw = response.data?.results || response.data || [];
-      const lists = Array.isArray(raw) ? raw : [];
-      const collected: any[] = [];
+      const response = await axios.get(WATCHLIST_ENDPOINT, {
+        params: {
+          username: SERVICE_USERNAME,
+          password: SERVICE_PASSWORD,
+        },
+      });
 
-      for (const list of lists) {
-        const embedded = [
-          ...(Array.isArray(list.items) ? list.items : []),
-          ...(Array.isArray(list.stocks) ? list.stocks : []),
-        ];
-
-        if (embedded.length) {
-          embedded.forEach((item) => collected.push({ ...item, watchlist_id: list.id }));
-          continue;
-        }
-
-        if (list.id) {
-          try {
-            const detail = await axios.get(`/api/watchlist/${list.id}/`);
-            const detailItems = detail.data?.items || detail.data?.stocks || [];
-            (Array.isArray(detailItems) ? detailItems : []).forEach((item) => collected.push({ ...item, watchlist_id: list.id }));
-          } catch {
-            continue;
-          }
-        }
-      }
-
-      setItems(collected);
-    } catch {
+      const watchlistItems = Array.isArray(response.data?.items) ? response.data.items : [];
+      setItems(watchlistItems);
+    } catch (error) {
+      console.error(error);
       toast.error('Cannot connect to server');
       setItems([]);
     } finally {
@@ -57,83 +53,86 @@ const Watchlist: React.FC = () => {
     void load();
   }, []);
 
-  const remove = async (item: any) => {
-    try {
-      const stock = item.stock || item;
-      const watchlistId = item.watchlist_id;
-      await axios.post(`/api/watchlist/${watchlistId}/remove_stock/`, { stock_id: stock.id });
-      toast.success('Removed from watchlist');
-      await load();
-    } catch {
-      toast.error('Failed to remove from watchlist');
-    }
-  };
-
-  const addToPortfolio = async (item: any) => {
-    if (!selectedPortfolioId) {
-      toast.error('Please select a portfolio from Dashboard');
-      return;
-    }
-
-    const stock = item.stock || item;
-    try {
-      await axios.post(`/api/portfolio/${selectedPortfolioId}/add_stock/`, { stock_symbol: stock.symbol, quantity: 1 });
-      toast.success('Added to Portfolio');
-    } catch {
-      toast.error('Cannot connect to server');
-    }
-  };
-
   return (
     <PageLayout title="Watchlist">
-      <SectionHeader label="Saved Ideas" title="Watchlist" description="Review your watchlisted stocks and move them into the selected portfolio." />
+      <SectionHeader label="Saved Ideas" title="Watchlist" description="Review your watchlisted stocks synced from the Django watchlist service." />
       <div className="glass-card" style={{ padding: 18 }}>
         {loading ? (
           <div className="empty-state">Loading watchlist...</div>
         ) : !items.length ? (
           <div className="empty-state">Your watchlist is empty. Go to Stocks page to add stocks.</div>
         ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Company</th>
-                  <th>Sector</th>
-                  <th>Price</th>
-                  <th>Change %</th>
-                  <th>Sentiment</th>
-                  <th>Date Added</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, index) => {
-                  const stock = item.stock || item;
-                  const change = getChangePercent(stock);
-                  return (
-                    <tr key={`${stock.symbol}-${index}`}>
-                      <td>{stock.symbol}</td>
-                      <td>{getCompanyName(stock)}</td>
-                      <td>{getSector(stock)}</td>
-                      <td>{format(getPrice(stock))}</td>
-                      <td style={{ color: change >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                        {change >= 0 ? '+' : '-'} {Math.abs(change).toFixed(2)}%
-                      </td>
-                      <td><SentimentBadge sentiment={String(stock.sentiment || 'Neutral')} /></td>
-                      <td>{String(item.created_at || item.date_added || '--').slice(0, 10)}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => void remove(item)}>Remove</button>
-                          <button className="btn btn-primary" style={{ padding: '4px 8px' }} onClick={() => void addToPortfolio(item)}>Add to Portfolio</button>
-                          <button className="btn btn-outline" style={{ padding: '4px 8px' }} onClick={() => (window.location.href = `/stocks/${stock.symbol}`)}>View Details</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: 16,
+            }}
+          >
+            {items.map((item) => (
+              <article
+                key={item.id}
+                className="glass-card"
+                style={{
+                  padding: 18,
+                  border: '1px solid var(--border)',
+                  display: 'grid',
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>
+                      {item.stock.symbol}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 6 }}>
+                      {item.stock.name}
+                    </div>
+                  </div>
+
+                  <span
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 999,
+                      background: 'rgba(126, 184, 247, 0.12)',
+                      border: '1px solid rgba(126, 184, 247, 0.22)',
+                      color: 'var(--accent-blue)',
+                      fontSize: 10,
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {item.stock.exchange}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      width: 'fit-content',
+                      padding: '5px 10px',
+                      borderRadius: 999,
+                      background: 'rgba(167, 139, 250, 0.12)',
+                      border: '1px solid rgba(167, 139, 250, 0.2)',
+                      color: 'var(--purple)',
+                      fontSize: 10,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {item.stock.sector}
+                  </span>
+
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Current Price</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {item.stock.currency === 'INR' ? `₹${Number(item.stock.current_price).toFixed(2)}` : `${item.stock.currency} ${Number(item.stock.current_price).toFixed(2)}`}
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
         )}
       </div>

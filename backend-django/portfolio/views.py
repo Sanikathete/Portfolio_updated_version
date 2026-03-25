@@ -21,7 +21,7 @@ class PortfolioItemSerializer(serializers.ModelSerializer):
 
 
 class PortfolioSerializer(serializers.ModelSerializer):
-    items = PortfolioItemSerializer(source="portfolioitem_set", many=True, read_only=True)
+    items = PortfolioItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = Portfolio
@@ -44,7 +44,7 @@ class PortfolioListView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         return Portfolio.objects.filter(user=self.request.user).prefetch_related(
-            "portfolioitem_set__stock"
+            "items__stock"
         )
 
     def perform_create(self, serializer):
@@ -57,7 +57,7 @@ class PortfolioDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Portfolio.objects.filter(user=self.request.user).prefetch_related(
-            "portfolioitem_set__stock"
+            "items__stock"
         )
 
 

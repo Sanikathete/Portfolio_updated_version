@@ -102,3 +102,40 @@ def remove_stock_from_watchlist(request, pk):
 
     item.delete()
     return Response({"removed": True}, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+def add_stock_simple(request):
+    from django.contrib.auth import authenticate
+    username = request.query_params.get("username")
+    password = request.query_params.get("password")
+    stock_symbol = request.query_params.get("stock_symbol")
+
+    user = authenticate(username=username, password=password)
+    if not user:
+        return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    watchlist, _ = Watchlist.objects.get_or_create(user=user, defaults={"name": "My Watchlist"})
+
+    try:
+        stock = Stock.objects.get(symbol=stock_symbol)
+    except Stock.DoesNotExist:
+        return Response({"error": "Stock not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    item, created = WatchlistItem.objects.get_or_create(watchlist=watchlist, stock=stock)
+    return Response({"created": created, "stock_symbol": stock.symbol}, status=201 if created else 200)
+
+
+@api_view(["GET"])
+def get_watchlist_simple(request):
+    from django.contrib.auth import authenticate
+    username = request.query_params.get("username")
+    password = request.query_params.get("password")
+
+    user = authenticate(username=username, password=password)
+    if not user:
+        return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    watchlist, _ = Watchlist.objects.get_or_create(user=user, defaults={"name": "My Watchlist"})
+    serializer = WatchlistSerializer(watchlist)
+    return Response(serializer.data)

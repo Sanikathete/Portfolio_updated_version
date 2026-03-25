@@ -158,7 +158,7 @@ const Dashboard: React.FC = () => {
       setForm((current) => ({ ...current, name: '', sector: '' }));
     } catch {
       try {
-        await axios.post('/api/portfolio/create/', { name: form.name || 'My Portfolio', sector: form.sector });
+        await axios.post('/api/portfolio/', { name: form.name || 'My Portfolio', sector: form.sector });
         const list = await fetchPortfolios();
         const newest = list[list.length - 1];
         if (newest?.id) setSelectedPortfolioId(newest.id);
