@@ -27,17 +27,7 @@ const Chat = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const hydrate = async () => {
-      try {
-        await api.get('/api/chatbot/history/');
-      } catch (error) {
-        console.error(error);
-      }
-    };
-
-    void hydrate();
-  }, []);
+  useEffect(() => {}, []);
 
   const sendMessage = async (event: FormEvent) => {
     event.preventDefault();
@@ -50,8 +40,12 @@ const Chat = () => {
     setLoading(true);
 
     try {
-      const response = await api.post('/api/chatbot/ask/', { message: question });
-      const reply = response.data.answer ?? response.data.response ?? 'I processed your market query and generated a live response.';
+      const response = await api.post(
+        'http://135.235.193.71:8001/chatbot/public-chat',
+        null,
+        { params: { message: question } }
+      );
+      const reply = response.data.reply ?? 'Sorry, I could not process your request.';
       setMessages((current) => [...current, { id: Date.now() + 1, sender: 'ai', text: reply }]);
     } catch (error) {
       console.error(error);
