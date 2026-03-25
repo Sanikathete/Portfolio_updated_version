@@ -39,7 +39,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         if use_telegram_recovery:
             missing_fields = [
                 field
-                for field in ['telegram_username', 'telegram_phone', 'telegram_chat_id']
+                for field in ['telegram_username', 'telegram_phone']
                 if not attrs.get(field)
             ]
             if missing_fields:
