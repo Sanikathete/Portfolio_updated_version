@@ -41,7 +41,7 @@ const Chat = () => {
 
     try {
       const response = await api.post(
-        'http://135.235.193.71:8000/api/chatbot/public-chat/',
+        '/api/api/chatbot/public-chat/',
         null,
         { params: { message: question } }
       );

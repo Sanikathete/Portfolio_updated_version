@@ -3,8 +3,8 @@ import { useAuth } from '../context/AuthContext';
 
 const chatbotBaseURL =
   typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
-    ? 'http://localhost:8000'
-    : 'http://135.235.193.71:8000';
+    ? ''
+    : '';
 
 interface Message {
   role: 'user' | 'ai';

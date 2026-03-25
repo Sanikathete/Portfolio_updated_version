@@ -129,6 +129,8 @@ const Growth: React.FC = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div className="glass-card" style={{ padding: 18 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Portfolio Sector Allocation</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Shows how your current portfolio value is distributed across sectors.</div>
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
                   <Pie data={sectorChartData} dataKey="value" innerRadius={60} outerRadius={90} isAnimationActive={false} paddingAngle={2}>
@@ -139,6 +141,8 @@ const Growth: React.FC = () => {
               </ResponsiveContainer>
             </div>
             <div className="glass-card" style={{ padding: 18 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Discount by Holding</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Compares upside or discount percentage across each holding in the portfolio.</div>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={[...normalized].sort((a, b) => b.discount - a.discount)}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -152,6 +156,8 @@ const Growth: React.FC = () => {
           </div>
 
           <div className="glass-card" style={{ padding: 18 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Growth Trend by Holding</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Plots relative growth momentum for the current portfolio holdings.</div>
             <ResponsiveContainer width="100%" height={280}>
               <ScatterChart>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />

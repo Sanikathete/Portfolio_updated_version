@@ -1,12 +1,14 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-const isLocalDev = false;
-const djangoBaseURL = isLocalDev ? 'http://localhost:8000' : 'http://135.235.193.71:8000';
-const chatbotBaseURL = isLocalDev ? 'http://localhost:8000' : 'http://135.235.193.71:8000';
+const normalizeApiPath = (url?: string) => {
+  if (!url) return url;
+  return url.replace(/^\/api\/api\//, '/api/');
+};
 
 const attachToken = (config: any) => {
   const token = localStorage.getItem('token');
+  config.url = normalizeApiPath(config.url);
   if (token) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
@@ -29,7 +31,7 @@ const handleError = (err: any) => {
 };
 
 const api = axios.create({
-  baseURL: djangoBaseURL,
+  baseURL: '',
   timeout: 30000,
 });
 
@@ -37,7 +39,7 @@ api.interceptors.request.use(attachToken);
 api.interceptors.response.use((response) => response, handleError);
 
 const chatbot = axios.create({
-  baseURL: chatbotBaseURL,
+  baseURL: '',
   timeout: 30000,
 });
 

@@ -14,10 +14,10 @@ interface Stock {
   updated_at: string;
 }
 
-const STOCKS_ENDPOINT = 'http://135.235.193.71:8000/api/stocks/public-stocks/';
-const WATCHLIST_ENDPOINT = 'http://135.235.193.71:8000/api/watchlist/watchlist/';
-const WATCHLIST_ADD_ENDPOINT = 'http://135.235.193.71:8000/api/watchlist/watchlist/add';
-const PORTFOLIO_ENDPOINT = 'http://135.235.193.71:8000/api/portfolio/';
+const STOCKS_ENDPOINT = '/api/api/stocks/public-stocks/';
+const WATCHLIST_ENDPOINT = '/api/api/watchlist/watchlist/';
+const WATCHLIST_ADD_ENDPOINT = '/api/api/watchlist/watchlist/add';
+const PORTFOLIO_ENDPOINT = '/api/api/portfolio/';
 const SERVICE_USERNAME = 'testteacher';
 const SERVICE_PASSWORD = 'teacher@123';
 const NIFTY_SECTORS = [

@@ -20,7 +20,7 @@ interface WatchlistItem {
   created_at: string;
 }
 
-const WATCHLIST_ENDPOINT = 'http://135.235.193.71:8000/api/watchlist/watchlist/';
+const WATCHLIST_ENDPOINT = '/api/api/watchlist/watchlist/';
 const SERVICE_USERNAME = 'testteacher';
 const SERVICE_PASSWORD = 'teacher@123';
 

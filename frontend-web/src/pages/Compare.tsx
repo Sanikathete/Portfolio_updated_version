@@ -77,6 +77,8 @@ const Compare: React.FC = () => {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div className="glass-card" style={{ padding: 18 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Price Comparison</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Compares the current market price of the two selected assets.</div>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={[{ label: 'Price', A: assetA?.price || 0, B: assetB?.price || 0 }]}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -90,6 +92,8 @@ const Compare: React.FC = () => {
               </ResponsiveContainer>
             </div>
             <div className="glass-card" style={{ padding: 18 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Multi-Factor Score Comparison</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Shows how both selected assets compare across benefit, return, and valuation metrics.</div>
               <ResponsiveContainer width="100%" height={300}>
                 <RadarChart data={radarData}>
                   <PolarGrid stroke="#1e1a3a" />

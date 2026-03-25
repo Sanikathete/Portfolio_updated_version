@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import axios from '../api/axios';
 import { PageLayout } from '../components/PageLayout';
 import { SectionHeader } from '../components/SectionHeader';
 import { StatCard } from '../components/StatCard';
@@ -10,6 +11,31 @@ const Crypto: React.FC = () => {
   const { format } = useCurrency();
   const [model, setModel] = useState('LINEAR');
   const [view, setView] = useState<'Historical' | 'Forecast'>('Forecast');
+  const [currentPrice, setCurrentPrice] = useState(87000);
+  const [priceChange, setPriceChange] = useState<number | null>(null);
+
+  useEffect(() => {
+    const loadLivePrice = async () => {
+      try {
+        const response = await axios.get('/api/stocks/live-crypto/', {
+          params: { symbol: 'BTC' },
+        });
+        const livePrice = Number(response.data?.price_inr);
+        if (Number.isFinite(livePrice) && livePrice > 0) {
+          setCurrentPrice(livePrice);
+        }
+
+        const liveChange = Number(response.data?.change_percent);
+        if (Number.isFinite(liveChange)) {
+          setPriceChange(liveChange);
+        }
+      } catch {
+        // Fall back to seeded demo price if the live quote is unavailable.
+      }
+    };
+
+    void loadLivePrice();
+  }, []);
 
   const forecast = useMemo(() => {
     const config = model === 'LINEAR'
@@ -19,15 +45,14 @@ const Crypto: React.FC = () => {
       : { bullish: true, historicalVolatility: 0.05, forecastVolatility: 0.03 };
     const data = generateForecastDataset({
       seed: `btc-${model}`,
-      currentPrice: 87000,
+      currentPrice,
       historicalDays: 180,
       forecastDays: 90,
       ...config,
     });
     return view === 'Historical' ? data.map((item) => ({ ...item, predicted: null })) : data;
-  }, [model, view]);
+  }, [currentPrice, model, view]);
 
-  const currentPrice = 87000;
   const projected = forecast.findLast?.((item) => item.predicted !== null)?.predicted ?? currentPrice;
   const change = ((projected - currentPrice) / currentPrice) * 100;
 
@@ -44,7 +69,7 @@ const Crypto: React.FC = () => {
           <StatCard label="Current Price" value={format(currentPrice)} dotColor="var(--blue-light)" />
           <StatCard label="Projected Price" value={format(projected)} dotColor="var(--accent-gold)" />
           <StatCard label="Projected Change" value={`${change.toFixed(2)}%`} dotColor={change >= 0 ? 'var(--green)' : 'var(--red)'} />
-          <StatCard label="Model" value={`${model} 30 day horizon`} dotColor="var(--purple-light)" />
+          <StatCard label="Live 24H Move" value={priceChange === null ? '--' : `${priceChange.toFixed(2)}%`} dotColor="var(--purple-light)" />
         </div>
         <div className="glass-card" style={{ padding: 18 }}>
           <ForecastChart data={forecast} title="BTC Projection" height={360} showArea />
