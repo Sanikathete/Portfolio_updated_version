@@ -14,6 +14,7 @@ class StockMiniSerializer(serializers.ModelSerializer):
 
 class WatchlistItemSerializer(serializers.ModelSerializer):
     stock = StockMiniSerializer(read_only=True)
+    created_at = serializers.DateTimeField(source="added_at", read_only=True)
 
     class Meta:
         model = WatchlistItem
@@ -21,7 +22,7 @@ class WatchlistItemSerializer(serializers.ModelSerializer):
 
 
 class WatchlistSerializer(serializers.ModelSerializer):
-    items = WatchlistItemSerializer(source="watchlistitem_set", many=True, read_only=True)
+    items = WatchlistItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = Watchlist
@@ -33,9 +34,7 @@ class WatchlistListView(generics.ListCreateAPIView):
     serializer_class = WatchlistSerializer
 
     def get_queryset(self):
-        return Watchlist.objects.filter(user=self.request.user).prefetch_related(
-            "watchlistitem_set__stock"
-        )
+        return Watchlist.objects.filter(user=self.request.user).prefetch_related("items__stock")
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -46,9 +45,7 @@ class WatchlistDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = WatchlistSerializer
 
     def get_queryset(self):
-        return Watchlist.objects.filter(user=self.request.user).prefetch_related(
-            "watchlistitem_set__stock"
-        )
+        return Watchlist.objects.filter(user=self.request.user).prefetch_related("items__stock")
 
 
 @api_view(["POST"])
