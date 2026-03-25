@@ -21,7 +21,7 @@ const Compare: React.FC = () => {
         setAssets([]);
         return;
       }
-      const response = await axios.get(`/api/portfolio/?portfolio_id=${selectedPortfolioId}`).catch(() => ({ data: [] }));
+      const response = await axios.get(`/api/portfolio/${selectedPortfolioId}/`).catch(() => ({ data: [] }));
       const items = Array.isArray(response.data?.items || response.data) ? (response.data.items || response.data) : [];
       const portfolioAssets = items.map((item: any, index: number) => {
         const stock = item.stock || item;

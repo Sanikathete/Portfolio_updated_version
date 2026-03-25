@@ -21,7 +21,7 @@ const Portfolio: React.FC = () => {
       }
 
       try {
-        const response = await axios.get(`/api/portfolio/?portfolio_id=${selectedPortfolioId}`);
+        const response = await axios.get(`/api/portfolio/${selectedPortfolioId}/`);
         const items = response.data?.items || response.data || [];
         const list = Array.isArray(items) ? items : [];
 

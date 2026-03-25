@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'watchlist',
     'django_celery_beat',
     'chatbot',
+    'news',
 ]
 
 MIDDLEWARE = [

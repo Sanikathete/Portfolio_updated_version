@@ -22,17 +22,17 @@ const MLAnalysis: React.FC = () => {
       if (!selectedPortfolioId) {
         setSymbols([]);
         setSelectedSymbol('');
+        setForecastRows([]);
         return;
       }
       try {
-        const response = await axios.get(`/api/portfolio/?portfolio_id=${selectedPortfolioId}`);
+        const response = await axios.get(`/api/portfolio/${selectedPortfolioId}/`);
         const items = response.data?.items || response.data || [];
         const list = Array.isArray(items) ? items : [];
         setSymbols(list);
-        if (!selectedSymbol && list[0]) {
-          const stock = list[0].stock || list[0];
-          setSelectedSymbol(stock.symbol);
-        }
+        const hasCurrentSymbol = list.some((item: any) => (item.stock?.symbol || item.symbol) === selectedSymbol);
+        const nextSymbol = hasCurrentSymbol ? selectedSymbol : (list[0]?.stock?.symbol || list[0]?.symbol || '');
+        if (nextSymbol !== selectedSymbol) setSelectedSymbol(nextSymbol);
       } catch {
         toast.error('Cannot connect to server');
       }
