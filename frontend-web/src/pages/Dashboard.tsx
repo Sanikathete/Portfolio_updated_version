@@ -13,9 +13,41 @@ import { INDIAN_STOCKS } from '../data/mockData';
 
 const sectorColors = ['#7eb8f7', '#f39c12', '#2ecc71', '#e74c3c', '#a78bfa', '#1abc9c', '#f0b429'];
 const marketSectors: Record<string, string[]> = {
-  India: ['Nifty Auto', 'Nifty Bank', 'Nifty IT', 'Nifty Pharma', 'Nifty FMCG', 'Nifty Metal'],
+  India: [
+    'Nifty Auto',
+    'Nifty Bank',
+    'Nifty Commodities',
+    'Nifty CPSE',
+    'Nifty Energy',
+    'Nifty FMCG',
+    'Nifty IT',
+    'Nifty Media',
+    'Nifty Metal',
+    'Nifty MNC',
+    'Nifty Pharma',
+    'Nifty PSE',
+    'Nifty PSU Bank',
+    'Nifty Realty',
+  ],
   USA: ['Technology', 'Healthcare', 'Financials', 'Energy', 'Consumer'],
   Global: ['All Sectors'],
+};
+
+const niftySectorToDbSectors: Record<string, string[]> = {
+  'Nifty Auto': ['Automobile and Auto Components'],
+  'Nifty Bank': ['Financial Services'],
+  'Nifty Commodities': ['Metals & Mining', 'Chemicals', 'Oil Gas & Consumable Fuels'],
+  'Nifty CPSE': ['Power', 'Capital Goods'],
+  'Nifty Energy': ['Oil Gas & Consumable Fuels', 'Power'],
+  'Nifty FMCG': ['Fast Moving Consumer Goods'],
+  'Nifty IT': ['Information Technology'],
+  'Nifty Media': ['Consumer Services'],
+  'Nifty Metal': ['Metals & Mining'],
+  'Nifty MNC': ['Consumer Durables', 'Consumer Services'],
+  'Nifty Pharma': ['Healthcare'],
+  'Nifty PSE': ['Power', 'Capital Goods'],
+  'Nifty PSU Bank': ['Financial Services'],
+  'Nifty Realty': ['Realty', 'Construction', 'Construction Materials'],
 };
 
 const Dashboard: React.FC = () => {
@@ -101,13 +133,18 @@ const Dashboard: React.FC = () => {
   }, [form.country]);
 
   const filteredStocks = useMemo(() => {
+    if (form.country !== 'India' || form.marketSector === 'All Sectors') return stocks;
+
+    const dbSectors = niftySectorToDbSectors[form.marketSector];
+    if (!dbSectors) return stocks;
+
     const filtered = stocks.filter((stock) => {
-      if (form.marketSector === 'All Sectors') return true;
-      const sector = getSector(stock).toLowerCase();
-      return sector.includes(form.marketSector.replace('Nifty ', '').toLowerCase()) || sector.includes(form.marketSector.toLowerCase());
+      const sector = (stock.sector || '').toLowerCase();
+      return dbSectors.some((s) => sector.includes(s.toLowerCase()));
     });
+
     return filtered.length ? filtered : stocks;
-  }, [stocks, form.marketSector]);
+  }, [stocks, form.marketSector, form.country]);
 
   useEffect(() => {
     if (!form.stockSymbol && filteredStocks[0]?.symbol) {

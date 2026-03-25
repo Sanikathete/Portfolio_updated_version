@@ -19,10 +19,43 @@ const WATCHLIST_ENDPOINT = 'http://135.235.193.71:8000/watchlist/';
 const WATCHLIST_ADD_ENDPOINT = 'http://135.235.193.71:8000/watchlist/add';
 const SERVICE_USERNAME = 'testteacher';
 const SERVICE_PASSWORD = 'teacher@123';
+const NIFTY_SECTORS = [
+  'All',
+  'Nifty Auto',
+  'Nifty Bank',
+  'Nifty Commodities',
+  'Nifty CPSE',
+  'Nifty Energy',
+  'Nifty FMCG',
+  'Nifty IT',
+  'Nifty Media',
+  'Nifty Metal',
+  'Nifty MNC',
+  'Nifty Pharma',
+  'Nifty PSE',
+  'Nifty PSU Bank',
+  'Nifty Realty',
+];
+
+const niftySectorToDbSectors: Record<string, string[]> = {
+  'Nifty Auto': ['Automobile and Auto Components'],
+  'Nifty Bank': ['Financial Services'],
+  'Nifty Commodities': ['Metals & Mining', 'Chemicals', 'Oil Gas & Consumable Fuels'],
+  'Nifty CPSE': ['Power', 'Capital Goods'],
+  'Nifty Energy': ['Oil Gas & Consumable Fuels', 'Power'],
+  'Nifty FMCG': ['Fast Moving Consumer Goods'],
+  'Nifty IT': ['Information Technology'],
+  'Nifty Media': ['Consumer Services'],
+  'Nifty Metal': ['Metals & Mining'],
+  'Nifty MNC': ['Consumer Durables', 'Consumer Services'],
+  'Nifty Pharma': ['Healthcare'],
+  'Nifty PSE': ['Power', 'Capital Goods'],
+  'Nifty PSU Bank': ['Financial Services'],
+  'Nifty Realty': ['Realty', 'Construction', 'Construction Materials'],
+};
 
 const Stocks: React.FC = () => {
   const [stocks, setStocks] = useState<Stock[]>([]);
-  const [filteredStocks, setFilteredStocks] = useState<Stock[]>([]);
   const [watchlistedSymbols, setWatchlistedSymbols] = useState<Set<string>>(new Set());
   const [addingSymbol, setAddingSymbol] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +78,6 @@ const Stocks: React.FC = () => {
 
         const data = Array.isArray(response.data) ? response.data : [];
         setStocks(data);
-        setFilteredStocks(data);
 
         const watchlistResponse = await axios.get(WATCHLIST_ENDPOINT, {
           params: {
@@ -63,7 +95,6 @@ const Stocks: React.FC = () => {
       } catch {
         setError('Unable to load NSE stocks right now. Please try again shortly.');
         setStocks([]);
-        setFilteredStocks([]);
         setWatchlistedSymbols(new Set());
       } finally {
         setLoading(false);
@@ -73,32 +104,28 @@ const Stocks: React.FC = () => {
     void loadStocks();
   }, []);
 
-  useEffect(() => {
-    const normalizedSearch = search.trim().toLowerCase();
+  const filteredStocks = useMemo(() => {
+    let result = stocks;
 
-    const nextFilteredStocks = stocks.filter((stock) => {
-      const matchesSearch =
-        !normalizedSearch ||
-        stock.symbol.toLowerCase().includes(normalizedSearch) ||
-        stock.name.toLowerCase().includes(normalizedSearch);
+    if (selectedSector !== 'All') {
+      const dbSectors = niftySectorToDbSectors[selectedSector] || [];
+      result = result.filter((stock) => {
+        const sector = (stock.sector || '').toLowerCase();
+        return dbSectors.some((s) => sector.includes(s.toLowerCase()));
+      });
+    }
 
-      const matchesSector = selectedSector === 'All' || stock.sector === selectedSector;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(
+        (stock) =>
+          stock.symbol?.toLowerCase().includes(q) ||
+          stock.name?.toLowerCase().includes(q)
+      );
+    }
 
-      return matchesSearch && matchesSector;
-    });
-
-    setFilteredStocks(nextFilteredStocks);
-  }, [stocks, search, selectedSector]);
-
-  const sectors = useMemo(() => {
-    return Array.from(
-      new Set(
-        stocks
-          .map((stock) => stock.sector)
-          .filter((sector) => Boolean(sector))
-      )
-    ).sort((a, b) => a.localeCompare(b));
-  }, [stocks]);
+    return result;
+  }, [stocks, selectedSector, search]);
 
   const addToWatchlist = async (symbol: string) => {
     setAddingSymbol(symbol);
@@ -166,10 +193,9 @@ const Stocks: React.FC = () => {
               value={selectedSector}
               onChange={(event) => setSelectedSector(event.target.value)}
             >
-              <option value="All">All Sectors</option>
-              {sectors.map((sector) => (
+              {NIFTY_SECTORS.map((sector) => (
                 <option key={sector} value={sector}>
-                  {sector}
+                  {sector === 'All' ? 'All Sectors' : sector}
                 </option>
               ))}
             </select>
