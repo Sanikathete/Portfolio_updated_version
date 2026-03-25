@@ -8,11 +8,13 @@ import { StatCard } from '../components/StatCard';
 import { ForecastChart } from '../components/ForecastChart';
 import { generateForecastDataset } from '../utils/forecastHelpers';
 import { useCurrency } from '../context/CurrencyContext';
+import { usePortfolio } from '../context/PortfolioContext';
 import { getCompanyName, getPrice, getChangePercent } from '../utils/pageUtils';
 
 const StockDetail: React.FC<{ mode?: 'portfolio' | 'stocks' }> = ({ mode = 'stocks' }) => {
   const { symbol = '' } = useParams();
   const { format } = useCurrency();
+  const { selectedPortfolioId } = usePortfolio();
   const [stock, setStock] = useState<any>(null);
   const [forecast, setForecast] = useState<any[]>([]);
   const [position, setPosition] = useState<any>(null);
@@ -37,7 +39,11 @@ const StockDetail: React.FC<{ mode?: 'portfolio' | 'stocks' }> = ({ mode = 'stoc
 
         if (mode === 'portfolio') {
           try {
-            const portfolioResponse = await axios.get('/api/portfolio/');
+            if (!selectedPortfolioId) {
+              setPosition(null);
+              return;
+            }
+            const portfolioResponse = await axios.get(`/api/portfolio/${selectedPortfolioId}/`);
             const list = portfolioResponse.data?.items || portfolioResponse.data || [];
             const match = (Array.isArray(list) ? list : []).find((item: any) => (item.stock?.symbol || item.symbol) === symbol);
             setPosition(match || null);
@@ -51,7 +57,7 @@ const StockDetail: React.FC<{ mode?: 'portfolio' | 'stocks' }> = ({ mode = 'stoc
     };
 
     void load();
-  }, [symbol, mode]);
+  }, [symbol, mode, selectedPortfolioId]);
 
   const currentPrice = getPrice(stock || {});
   const buyPrice = Number(position?.buy_price ?? position?.buyPrice ?? currentPrice);

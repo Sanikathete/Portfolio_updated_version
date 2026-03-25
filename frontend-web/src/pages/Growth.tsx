@@ -12,10 +12,22 @@ import { getPrice } from '../utils/pageUtils';
 
 const colors = ['#7eb8f7', '#f39c12', '#2ecc71', '#e74c3c', '#a78bfa', '#1abc9c'];
 
+const toFiniteNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const buildFallbackDelta = (seedKey: string, fallback = 0) => {
+  if (Math.abs(fallback) > 0.01) return fallback;
+  const random = seededNumber(seedKey);
+  return Number((-5 + random() * 16).toFixed(2));
+};
+
 const Growth: React.FC = () => {
   const { selectedPortfolioId } = usePortfolio();
   const [holdings, setHoldings] = useState<any[]>([]);
   const [forecast, setForecast] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -25,14 +37,23 @@ const Growth: React.FC = () => {
         return;
       }
 
+      setLoading(true);
       try {
         const response = await axios.get(`/api/portfolio/${selectedPortfolioId}/`);
         const items = response.data?.items || response.data || [];
         const list = Array.isArray(items) ? items : [];
         setHoldings(list);
 
-        const startValue = list.reduce((sum: number, item: any) => sum + Number(item.buy_price ?? getPrice(item.stock || item)) * Number(item.quantity ?? 0), 0);
-        const currentValue = list.reduce((sum: number, item: any) => sum + getPrice(item.stock || item) * Number(item.quantity ?? 0), 0);
+        const startValue = list.reduce((sum: number, item: any) => {
+          const buyPrice = toFiniteNumber(item.buy_price ?? getPrice(item.stock || item), getPrice(item.stock || item));
+          const quantity = toFiniteNumber(item.quantity, 0);
+          return sum + buyPrice * quantity;
+        }, 0);
+        const currentValue = list.reduce((sum: number, item: any) => {
+          const currentPrice = toFiniteNumber(getPrice(item.stock || item), 0);
+          const quantity = toFiniteNumber(item.quantity, 0);
+          return sum + currentPrice * quantity;
+        }, 0);
         const random = seededNumber(`growth-${selectedPortfolioId}`);
         const historical = Array.from({ length: 90 }, (_, index) => {
           const progress = index / 89;
@@ -56,6 +77,8 @@ const Growth: React.FC = () => {
         setForecast(buildForecastData(historical, predicted));
       } catch {
         toast.error('Cannot connect to server');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -64,26 +87,35 @@ const Growth: React.FC = () => {
 
   const normalized = useMemo(() => holdings.map((item) => {
     const stock = item.stock || item;
+    const currentPrice = toFiniteNumber(getPrice(stock), 0);
+    const buyPrice = toFiniteNumber(item.buy_price, currentPrice);
+    const quantity = toFiniteNumber(item.quantity, 0);
+    const rawDiscount = buyPrice ? ((currentPrice - buyPrice) / buyPrice) * 100 : 0;
+    const discount = buildFallbackDelta(`${stock.symbol}-growth-discount`, rawDiscount);
+    const growth = buildFallbackDelta(`${stock.symbol}-growth-value`, toFiniteNumber(stock.change_percent ?? stock.change, 0));
+
     return {
       symbol: stock.symbol,
       sector: stock.sector || 'Other',
-      discount: Number(item.buy_price ? ((getPrice(stock) - Number(item.buy_price)) / Number(item.buy_price)) * 100 : 0),
-      value: getPrice(stock) * Number(item.quantity ?? 0),
-      growth: Number(stock.change_percent ?? stock.change ?? 0),
+      discount,
+      value: Number((currentPrice * quantity).toFixed(2)),
+      growth,
     };
-  }), [holdings]);
+  }).filter((item) => item.symbol), [holdings]);
 
   const sectorData = Object.values(normalized.reduce((acc: Record<string, { name: string; value: number }>, item) => {
     if (!acc[item.sector]) acc[item.sector] = { name: item.sector, value: 0 };
     acc[item.sector].value += item.value;
     return acc;
-  }, {}));
+  }, {})).filter((item) => item.value > 0);
+  const sectorChartData = sectorData.length ? sectorData : [{ name: 'No Data', value: 1 }];
 
   return (
     <PageLayout title="Growth">
       <SectionHeader label="Forward Curves" title="Growth" description="Portfolio growth follows the selected portfolio and is connected through today's point." />
       {!selectedPortfolioId ? <div className="empty-state">Please select a portfolio from Dashboard</div> : (
         <div style={{ display: 'grid', gap: 16 }}>
+          {loading ? <div className="empty-state">Loading growth analytics...</div> : null}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14 }}>
             <StatCard label="Holdings Count" value={normalized.length} dotColor="var(--purple)" />
             <StatCard label="Average Discount" value={normalized.length ? normalized.reduce((sum, item) => sum + item.discount, 0) / normalized.length : 0} dotColor="var(--accent-gold)" />
@@ -99,8 +131,8 @@ const Growth: React.FC = () => {
             <div className="glass-card" style={{ padding: 18 }}>
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
-                  <Pie data={sectorData} dataKey="value" innerRadius={60} outerRadius={90}>
-                    {sectorData.map((entry, index) => <Cell key={entry.name} fill={colors[index % colors.length]} />)}
+                  <Pie data={sectorChartData} dataKey="value" innerRadius={60} outerRadius={90} isAnimationActive={false} paddingAngle={2}>
+                    {sectorChartData.map((entry, index) => <Cell key={entry.name} fill={colors[index % colors.length]} />)}
                   </Pie>
                   <Tooltip />
                 </PieChart>
@@ -113,7 +145,7 @@ const Growth: React.FC = () => {
                   <XAxis dataKey="symbol" tick={{ fill: '#5a5080', fontSize: 10 }} />
                   <YAxis tick={{ fill: '#5a5080', fontSize: 10 }} />
                   <Tooltip />
-                  <Bar dataKey="discount" fill="#7c3aed" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="discount" fill="#7c3aed" radius={[6, 6, 0, 0]} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -126,7 +158,7 @@ const Growth: React.FC = () => {
                 <XAxis type="number" dataKey="x" tick={{ fill: '#5a5080', fontSize: 10 }} />
                 <YAxis type="number" dataKey="y" tick={{ fill: '#5a5080', fontSize: 10 }} />
                 <Tooltip />
-                <Scatter data={normalized.map((item, index) => ({ x: index + 1, y: item.growth }))} fill="#a78bfa" />
+                <Scatter data={normalized.map((item, index) => ({ x: index + 1, y: item.growth }))} fill="#a78bfa" line isAnimationActive={false} />
               </ScatterChart>
             </ResponsiveContainer>
           </div>

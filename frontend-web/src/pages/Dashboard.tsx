@@ -56,6 +56,11 @@ const matchesSector = (stock: any, sectorAliases: string[]) => {
   return sectorAliases.some((alias) => sector.includes(alias.toLowerCase()));
 };
 
+const toFiniteNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 const buildAnalysisDelta = (seedKey: string, fallback = 0) => {
   if (Math.abs(fallback) > 0.01) return fallback;
   const random = seededNumber(seedKey);
@@ -68,8 +73,10 @@ const Dashboard: React.FC = () => {
   const [holdings, setHoldings] = useState<any[]>([]);
   const [stocks, setStocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [holdingsLoading, setHoldingsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [removingSymbol, setRemovingSymbol] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     sector: '',
@@ -107,16 +114,25 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    const response = await axios.get(`/api/portfolio/${portfolioId}/`);
-    const data = response.data?.items || response.data?.results || response.data || [];
-    setHoldings(Array.isArray(data) ? data : []);
+    setHoldingsLoading(true);
+    try {
+      const response = await axios.get(`/api/portfolio/${portfolioId}/`);
+      const data = response.data?.items || response.data?.results || response.data || [];
+      setHoldings(Array.isArray(data) ? data : []);
+    } finally {
+      setHoldingsLoading(false);
+    }
   };
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        await Promise.all([fetchPortfolios(), fetchStocks()]);
+        const [portfolioList] = await Promise.all([fetchPortfolios(), fetchStocks()]);
+        const initialPortfolioId = selectedPortfolioId ?? portfolioList[0]?.id ?? null;
+        if (initialPortfolioId) {
+          await fetchHoldings(initialPortfolioId);
+        }
       } catch {
         setStocks(INDIAN_STOCKS);
         toast.error('Cannot connect to server');
@@ -158,15 +174,17 @@ const Dashboard: React.FC = () => {
   const normalizedHoldings = useMemo(() => {
     return holdings.map((item) => {
       const stock = item.stock || item;
-      const currentPrice = getPrice(stock);
-      const buyPrice = Number(item.buy_price ?? item.buyPrice ?? currentPrice);
-      const quantity = Number(item.quantity ?? 0);
+      const currentPrice = toFiniteNumber(getPrice(stock));
+      const buyPrice = toFiniteNumber(item.buy_price ?? item.buyPrice ?? currentPrice, currentPrice);
+      const quantity = toFiniteNumber(item.quantity, 0);
       const rawDiscount = buyPrice ? ((currentPrice - buyPrice) / buyPrice) * 100 : 0;
       const discount = buildAnalysisDelta(`${stock.symbol}-discount`, rawDiscount);
       const rawPnl = (currentPrice - buyPrice) * quantity;
       const pnl = Math.abs(rawPnl) > 0.01
         ? rawPnl
         : Number(((currentPrice * quantity * discount) / 100).toFixed(2));
+      const value = Number((currentPrice * quantity).toFixed(2));
+      const pe = toFiniteNumber(stock.pe_ratio ?? stock.pe, 18);
 
       return {
         symbol: stock.symbol,
@@ -174,23 +192,25 @@ const Dashboard: React.FC = () => {
         quantity,
         buyPrice,
         currentPrice,
-        pe: Number(stock.pe_ratio ?? stock.pe ?? 18),
+        pe,
         discount,
         pnl,
-        value: currentPrice * quantity,
+        value,
         sector: getSector(stock),
       };
-    });
+    }).filter((item) => item.symbol);
   }, [holdings]);
 
-  const totalValue = normalizedHoldings.reduce((sum, item) => sum + item.value, 0);
+  const dashboardLoading = loading || holdingsLoading;
+  const totalValue = normalizedHoldings.reduce((sum, item) => sum + toFiniteNumber(item.value), 0);
   const avgDiscount = normalizedHoldings.length ? normalizedHoldings.reduce((sum, item) => sum + item.discount, 0) / normalizedHoldings.length : 0;
   const topPick = [...normalizedHoldings].sort((a, b) => b.value - a.value)[0]?.symbol || '--';
   const pieData = Object.values(normalizedHoldings.reduce((acc: Record<string, { name: string; value: number }>, item) => {
     if (!acc[item.sector]) acc[item.sector] = { name: item.sector, value: 0 };
     acc[item.sector].value += item.value;
     return acc;
-  }, {}));
+  }, {})).filter((item) => item.value > 0).sort((a, b) => b.value - a.value);
+  const sectorAllocationData = pieData.length ? pieData : [{ name: 'No Data', value: 1 }];
 
   const createPortfolio = async () => {
     setCreating(true);
@@ -264,6 +284,26 @@ const Dashboard: React.FC = () => {
       toast.error('Cannot connect to server');
     } finally {
       setAdding(false);
+    }
+  };
+
+  const removeStock = async (stockSymbol: string) => {
+    if (!selectedPortfolioId) {
+      toast.error('Please select a portfolio from Dashboard');
+      return;
+    }
+
+    setRemovingSymbol(stockSymbol);
+    try {
+      await axios.post(`/api/portfolio/${selectedPortfolioId}/remove_stock/`, {
+        stock_symbol: stockSymbol,
+      });
+      await fetchHoldings(selectedPortfolioId);
+      toast.success(`${stockSymbol} removed`);
+    } catch {
+      toast.error('Cannot remove this stock right now.');
+    } finally {
+      setRemovingSymbol(null);
     }
   };
 
@@ -350,7 +390,7 @@ const Dashboard: React.FC = () => {
 
         <div className="glass-card" style={{ padding: 18 }}>
           <SectionHeader label="Holdings" title="Live Portfolio Positions" description="All price values are converted through the selected currency context." />
-          {loading ? (
+          {dashboardLoading ? (
             <SkeletonTable rows={6} cols={9} />
           ) : (
             <div className="table-wrap">
@@ -366,6 +406,7 @@ const Dashboard: React.FC = () => {
                     <th>Discount %</th>
                     <th>P&amp;L</th>
                     <th>Position Value</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -380,11 +421,21 @@ const Dashboard: React.FC = () => {
                       <td style={{ color: item.discount >= 0 ? 'var(--green)' : 'var(--red)' }}>{item.discount.toFixed(2)}%</td>
                       <td style={{ color: item.pnl >= 0 ? 'var(--green)' : 'var(--red)' }}>{format(item.pnl)}</td>
                       <td>{format(item.value)}</td>
+                      <td>
+                        <button
+                          className="btn btn-danger"
+                          style={{ padding: '4px 8px' }}
+                          onClick={() => void removeStock(item.symbol)}
+                          disabled={removingSymbol === item.symbol}
+                        >
+                          {removingSymbol === item.symbol ? 'Removing...' : 'Remove'}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {!normalizedHoldings.length ? (
                     <tr>
-                      <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No holdings in the selected portfolio.</td>
+                      <td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No holdings in the selected portfolio.</td>
                     </tr>
                   ) : null}
                 </tbody>
@@ -401,8 +452,8 @@ const Dashboard: React.FC = () => {
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Sector Allocation</div>
             <ResponsiveContainer width="100%" height={280}>
               <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={92}>
-                  {pieData.map((entry, index) => <Cell key={entry.name} fill={sectorColors[index % sectorColors.length]} />)}
+                <Pie data={sectorAllocationData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={92} paddingAngle={2} isAnimationActive={false} stroke="rgba(124,58,237,0.25)">
+                  {sectorAllocationData.map((entry, index) => <Cell key={entry.name} fill={sectorColors[index % sectorColors.length]} />)}
                 </Pie>
                 <Tooltip />
               </PieChart>
@@ -416,7 +467,7 @@ const Dashboard: React.FC = () => {
                 <XAxis dataKey="symbol" tick={{ fill: '#5a5080', fontSize: 10 }} />
                 <YAxis tick={{ fill: '#5a5080', fontSize: 10 }} />
                 <Tooltip />
-                <Bar dataKey="discount" fill="#7c3aed" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="discount" fill="#7c3aed" radius={[6, 6, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -428,7 +479,7 @@ const Dashboard: React.FC = () => {
                 <XAxis dataKey="symbol" tick={{ fill: '#5a5080', fontSize: 10 }} />
                 <YAxis tick={{ fill: '#5a5080', fontSize: 10 }} />
                 <Tooltip />
-                <Bar dataKey="pnl" fill="#f0b429" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="pnl" fill="#f0b429" radius={[6, 6, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>
