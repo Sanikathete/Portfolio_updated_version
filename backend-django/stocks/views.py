@@ -32,8 +32,7 @@ def public_stocks(request):
         return Response({"error": "Invalid credentials"}, status=401)
 
     stocks = Stock.objects.all().values(
-        "id", "symbol", "name", "sector", "exchange",
-        "current_price", "pe_ratio", "market_cap",
-        "week_52_high", "week_52_low", "currency"
-    )
+    "id", "symbol", "name", "sector", "exchange",
+    "current_price", "currency"
+)
     return Response(list(stocks))
