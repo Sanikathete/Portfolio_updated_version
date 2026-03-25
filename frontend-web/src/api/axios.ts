@@ -19,11 +19,7 @@ const handleError = (err: any) => {
   const status = err?.response?.status;
 
   if (status === 401) {
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
-    localStorage.removeItem('user_id');
-    localStorage.removeItem('selected_portfolio_id');
-    window.location.href = '/login';
+    return Promise.reject(err);
   } else if (status === 500) {
     toast.error('Server error. Please try again.');
   } else if (!err?.response) {
@@ -57,5 +53,48 @@ const chatbot = axios.create({
 chatbot.interceptors.request.use(attachToken);
 chatbot.interceptors.response.use((response) => response, handleError);
 
-export { fastapi, chatbot };
+export interface RegisterPayload {
+  username: string;
+  email: string;
+  password: string;
+  telegram_username?: string;
+  telegram_phone?: string;
+  telegram_chat_id?: string;
+  use_telegram_recovery: boolean;
+  security_question?: string;
+  security_answer?: string;
+}
+
+export interface SecurityQuestionResponse {
+  security_question: string | null;
+  use_telegram_recovery: boolean;
+}
+
+export const registerUser = async (payload: RegisterPayload) => {
+  const response = await api.post('/api/users/register/', payload);
+  return response.data;
+};
+
+export const forgotPasswordTelegram = async (username: string) => {
+  const response = await api.post('/api/users/forgot-password/telegram/', { username });
+  return response.data;
+};
+
+export const forgotPasswordSecurity = async (username: string, security_answer: string) => {
+  const response = await api.post('/api/users/forgot-password/security/', { username, security_answer });
+  return response.data as { token: string };
+};
+
+export const resetPassword = async (token: string, new_password: string) => {
+  const response = await api.post('/api/users/reset-password/', { token, new_password });
+  return response.data;
+};
+
+export const getSecurityQuestion = async (username: string) => {
+  const response = await api.get<SecurityQuestionResponse>('/api/users/security-question/', {
+    params: { username },
+  });
+  return response.data;
+};
+
 export default api;

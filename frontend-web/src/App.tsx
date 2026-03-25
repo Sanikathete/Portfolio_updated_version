@@ -11,6 +11,7 @@ import './styles/globals.css';
 const Home = React.lazy(() => import('./pages/Home'));
 const Login = React.lazy(() => import('./pages/Login'));
 const Register = React.lazy(() => import('./pages/Register'));
+const ForgotPassword = React.lazy(() => import('./pages/ForgotPassword'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Stocks = React.lazy(() => import('./pages/Stocks'));
 const StockDetail = React.lazy(() => import('./pages/StockDetail'));
@@ -46,6 +47,7 @@ export default function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/stocks" element={<ProtectedRoute><Stocks /></ProtectedRoute>} />
                 <Route path="/stocks/:symbol" element={<ProtectedRoute><StockDetail /></ProtectedRoute>} />

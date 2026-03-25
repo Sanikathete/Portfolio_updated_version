@@ -4,12 +4,13 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
 const Login: React.FC = () => {
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  if (authLoading) return null;
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -44,6 +45,11 @@ const Login: React.FC = () => {
         <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center', marginTop: 20 }}>
           {loading ? 'Signing in...' : 'Login'}
         </button>
+        <div style={{ marginTop: 12, textAlign: 'right' }}>
+          <Link to="/forgot-password" style={{ color: 'var(--purple-light)', fontSize: 12 }}>
+            Forgot Password?
+          </Link>
+        </div>
         <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 14, textAlign: 'center' }}>
           Need an account? <Link to="/register" style={{ color: 'var(--purple-light)' }}>Register</Link>
         </div>

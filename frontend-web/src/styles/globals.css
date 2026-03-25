@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --bg-main: #08051a;
   --bg-panel: #0d0b1e;
