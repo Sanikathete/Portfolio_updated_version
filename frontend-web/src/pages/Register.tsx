@@ -59,7 +59,7 @@ const Register: React.FC = () => {
     event.preventDefault();
 
     if (recoveryMethod === 'telegram') {
-      if (!form.telegram_username || !form.telegram_phone || !form.telegram_chat_id) {
+      if (!form.telegram_username || !form.telegram_phone ) {
         toast.error('Please complete all Telegram recovery fields.');
         return;
       }
@@ -133,7 +133,7 @@ const Register: React.FC = () => {
                   placeholder="Choose a username"
                 />
               </label>
-              <label className="block">
+      <label className="block">
                 <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Email</span>
                 <input
                   type="email"
@@ -227,16 +227,6 @@ const Register: React.FC = () => {
                       onChange={(event) => updateField('telegram_phone', event.target.value)}
                       placeholder="+1 555 000 0000"
                     />
-                  </label>
-                  <label className="block md:col-span-2">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Telegram Chat ID</span>
-                    <input
-                      className="w-full rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/30"
-                      value={form.telegram_chat_id}
-                      onChange={(event) => updateField('telegram_chat_id', event.target.value)}
-                      placeholder="Paste your chat ID"
-                    />
-                    <p className="mt-2 text-xs text-slate-500">To find your Chat ID, message @StockSphereBot on Telegram, then check with our bot.</p>
                   </label>
                 </div>
               ) : (
