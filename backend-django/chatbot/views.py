@@ -63,10 +63,18 @@ def detect_question_type(message: str) -> str:
         return "greeting"
     if any(k in msg for k in ["price of", "what is the price", "current price", "live price"]):
         return "price_query"
+    if any(k in msg for k in [
+        "sector", "banking stocks", "it stocks", "pharma stocks",
+        "fmcg stocks", "metal stocks", "energy stocks", "auto stocks",
+        "power stocks", "steel stocks", "realty stocks", "media stocks",
+        "top it", "top metal", "top energy", "top banking", "top pharma",
+        "top auto", "top fmcg", "best it", "best metal", "best energy",
+        "best banking", "best pharma", "best auto", "good energy",
+        "good pharma", "good banking", "good it", "good metal",
+    ]):
+        return "sector_query"
     if any(k in msg for k in ["best stock", "recommend", "should i buy", "what to buy", "top stock"]):
         return "buy_advice"
-    if any(k in msg for k in ["sector", "banking stocks", "it stocks", "pharma stocks", "fmcg stocks"]):
-        return "sector_query"
     if any(k in msg for k in ["compare", "vs ", "versus", "better between"]):
         return "compare_stocks"
     if any(k in msg for k in ["long term", "5 year", "10 year"]):
@@ -258,8 +266,12 @@ def find_stock(stocks: list, query: str):
 
 
 def get_stocks_by_sector(stocks: list, sector_keyword: str):
-    sector_upper = sector_keyword.upper()
-    return [s for s in stocks if sector_upper in str(s.get("sector", "")).upper()][:5]
+    keyword_lower = sector_keyword.lower()
+    return [
+        s for s in stocks
+        if keyword_lower in
+        str(s.get("sector", "")).lower()
+    ][:5]
 
 
 def pick_diverse_stocks(primary_stocks: list, fallback_stocks: list, limit: int = 4):
@@ -349,8 +361,10 @@ def public_chat(request):
         return Response({"error": "Message is required"}, status=400)
 
     try:
-        normalized = message.strip().lower()
-        if normalized in {"hi", "hello", "hey", "hey there", "good morning", "good evening"}:
+        normalized = re.sub(r"[^a-z]+", " ", message.lower()).strip()
+        greeting_tokens = {"hi", "hello", "hey", "hey there", "good morning", "good evening"}
+        first_token = normalized.split()[0] if normalized else ""
+        if normalized in greeting_tokens or first_token in {"hi", "hello", "hey"}:
             reply = "Hello! I'm StockSphere AI, your market assistant. How can I help you today?"
             return Response({
                 "mode": "public",
@@ -359,57 +373,33 @@ def public_chat(request):
             })
 
         stocks = get_all_stocks_data()
-        found_stock = find_stock(stocks, message) or find_stock_in_db(message)
         question_type = detect_question_type(message)
+        if question_type in ("sector_query", "buy_advice", "avoid_advice", "out_of_scope", "market_news", "ipo_query"):
+            found_stock = None
+        else:
+            found_stock = find_stock(stocks, message) or find_stock_in_db(message)
         use_personal_context = True
         if question_type == "buy_advice" and not has_personal_terms(message):
             use_personal_context = False
 
         if question_type == "market_news":
             general_news = get_general_market_news()
-            stock_news_ctx = format_news_context(general_news, label="Latest Indian Market News")
-            prompt = f"""User asked: {message}
-
-{stock_news_ctx}
-
-Instructions:
-- Summarise the news headlines above in a friendly, helpful way
-- Explain briefly how this news might affect the market
-- Tell user they can ask about any specific stock for more details
-- Add disclaimer: This is not financial advice."""
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": PERSONAL_SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=800,
-                temperature=0.7,
+            news_headlines = format_news_context(
+                general_news,
+                label="Latest Indian Market News"
             )
-            return Response({
-                "mode": "personal",
-                "message": message,
-                "reply": response.choices[0].message.content,
-                "portfolio_stats": {
-                    "best_performing": None,
-                    "most_profitable": None,
-                    "highest_price_stock": None,
-                    "lowest_price_stock": None,
-                },
-                "recommendations": [],
-            })
-
-        if question_type == "market_news":
-            general_news = get_general_market_news()
-            stock_news_ctx = format_news_context(general_news, label="Latest Indian Market News")
             prompt = f"""User asked: {message}
 
-{stock_news_ctx}
+{news_headlines}
 
 Instructions:
-- Summarise the news headlines above in a friendly, helpful way
-- Explain briefly how this news might affect the market
-- Tell user they can ask about any specific stock for more details
+- ONLY talk about the news headlines listed above
+- Summarise each headline in 1-2 simple sentences
+- Do NOT mention portfolio, watchlist, or any user data
+- Do NOT suggest any stocks to buy
+- Do NOT mention recommended stocks at all
+- If no headlines are available say news is temporarily
+  unavailable and suggest checking moneycontrol.com
 - Add disclaimer: This is not financial advice."""
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -549,19 +539,50 @@ Instructions:
 - Always add: This is not financial advice. Do your own research and consult a SEBI-registered advisor."""
         elif question_type == "sector_query":
             sector_map = {
-                "bank": "Financial Services",
-                "banking": "Financial Services",
-                "it": "Information Technology",
-                "tech": "Information Technology",
-                "software": "Information Technology",
-                "nse it": "Information Technology",
-                "pharma": "Healthcare", "auto": "Automobile",
-                "fmcg": "Fast Moving Consumer Goods", "energy": "Power",
-                "real estate": "Realty", "healthcare": "Healthcare",
-                "infrastructure": "Construction",
+                "it": "Nifty IT",
+                "tech": "Nifty IT",
+                "technology": "Nifty IT",
+                "software": "Nifty IT",
+                "metal": "Nifty Metal",
+                "steel": "Nifty Metal",
+                "energy": "Nifty Energy",
+                "power": "Nifty Energy",
+                "bank": "Nifty Bank",
+                "banking": "Nifty Bank",
+                "pharma": "Nifty Pharma",
+                "pharmaceutical": "Nifty Pharma",
+                "auto": "Nifty Auto",
+                "automobile": "Nifty Auto",
+                "fmcg": "Nifty FMCG",
+                "media": "Nifty Media",
+                "realty": "Nifty Realty",
+                "real estate": "Nifty Realty",
+                "financials": "Financials",
+                "finance": "Financials",
+                "healthcare": "Healthcare",
+                "consumer": "Consumer",
             }
-            matched_sector = next((full for key, full in sector_map.items() if key in msg_lower), None)
-            sector_stocks = get_stocks_by_sector(stocks, matched_sector or message) if matched_sector else pgvector_results[:5]
+            matched_sector = next(
+                (full for key, full in sector_map.items()
+                 if key in msg_lower),
+                None
+            )
+            sector_stocks = get_stocks_by_sector(
+                stocks, matched_sector or message
+            ) if matched_sector else pgvector_results[:5]
+
+            if not sector_stocks:
+                sector_stocks = [
+                    s for s in stocks
+                    if any(
+                        word in str(s.get("sector", "")).lower()
+                        for word in msg_lower.split()
+                        if len(word) > 2
+                    )
+                ][:5]
+
+            if not sector_stocks:
+                sector_stocks = pgvector_results[:5]
             sector_text = "\n".join([
                 f"- {s.get('symbol')} | {s.get('name')} | Rs{s.get('current_price')}"
                 for s in sector_stocks
@@ -576,25 +597,73 @@ Instructions:
 - Mention 2-3 stocks from the list as examples
 - Explain key factors affecting this sector
 - Add disclaimer about investment advice."""
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": PUBLIC_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=600,
+                temperature=0.7,
+            )
+            return Response({
+                "mode": "public",
+                "message": message,
+                "question_type": "sector_query",
+                "stock_found": False,
+                "reply": response.choices[0].message.content,
+            })
         elif question_type == "greeting":
             prompt = f"""User said: {message}
 
 Instructions:
-- Greet them warmly as StockSphere AI
-- Tell them you can help with: live stock prices, stock news, recommendations, sector analysis, IPO info, dividend stocks, long/short term investing
-- Mention both public and personal (post-login) chatbot modes
-- Keep it short, friendly, and welcoming."""
+- Greet the user warmly as StockSphere AI
+- Do NOT mention portfolio data, stocks, or recommendations
+- Tell them you can help with: live stock prices, stock news,
+  buy recommendations, sector analysis, IPO info,
+  dividend stocks, long term and short term investing
+- Mention they can login for personal portfolio analysis
+- Keep it short, friendly, and under 5 lines
+- Do not add any disclaimer for greetings"""
         elif question_type == "compare_stocks":
-            symbols_in_msg = [w.upper() for w in message.split() if w.isalpha() and len(w) > 2]
+            stopwords = {
+                "COMPARE", "VERSUS", "BETTER", "WHICH", "BETWEEN",
+                "AND", "THE", "FOR", "TOP", "BEST", "GOOD", "WITH",
+                "WHAT", "HOW", "ARE", "STOCK", "STOCKS", "INDIA"
+            }
+            symbols_in_msg = [
+                w.upper() for w in message.split()
+                if w.isalpha() and len(w) > 2
+                and w.upper() not in stopwords
+            ]
             live_compare = []
+            unavailable_symbols = []
             for sym in symbols_in_msg[:2]:
                 live = get_live_price(sym)
-                if live:
-                    live_compare.append(f"{sym} - Live: Rs{live['live_price']} | 52W H: Rs{live['52w_high']} | L: Rs{live['52w_low']}")
+                if live and live.get("live_price"):
+                    live_compare.append(
+                        f"{sym}: Live Rs{live['live_price']} | "
+                        f"52W High Rs{live['52w_high']} | "
+                        f"52W Low Rs{live['52w_low']}"
+                    )
                 else:
-                    live_compare.append(f"{sym}: Live data not available in StockSphere. User should check nseindia.com for current price.")
+                    unavailable_symbols.append(sym)
 
-            live_compare_text = "\n".join(live_compare) if live_compare else "Live prices not available for comparison."
+            live_compare_text = (
+                "\n".join(live_compare)
+                if live_compare
+                else "No live data available for these stocks."
+            )
+
+            if unavailable_symbols:
+                unavailable_note = (
+                    "IMPORTANT: The following stocks have NO data "
+                    "in StockSphere: " + ", ".join(unavailable_symbols) +
+                    ". You MUST tell the user these stocks are not "
+                    "available and suggest checking nseindia.com"
+                )
+            else:
+                unavailable_note = ""
             prompt = f"""User asked: {message}
 
 Live Prices:
@@ -603,9 +672,10 @@ Live Prices:
 Similar stocks: {pgvector_results}
 
 Instructions:
-- Compare the stocks using live price data above
-- Talk about sector, price range, strengths and weaknesses
-- Give a balanced recommendation
+{unavailable_note}
+- If any stock has no data, clearly say so first
+- Do NOT make up or guess data for unavailable stocks
+- Only compare stocks where live data was fetched above
 - Add disclaimer: This is not financial advice."""
         elif question_type == "longterm_advice":
             sample_stocks = pgvector_results if pgvector_results else stocks[:20]
@@ -662,12 +732,19 @@ Instructions:
             prompt = f"""User asked: {message}
 
 Instructions:
-- Explain what an IPO is and general steps to apply
-- Do NOT mention any specific IPO names or companies
-- Tell the user to check nseindia.com and sebi.gov.in for latest upcoming IPOs
-- Never guess or make up any IPO company names
-- Mention risks of IPO investing
-- Add disclaimer: This is not financial advice. Please consult a SEBI-registered advisor."""
+- Do NOT mention any specific IPO company names
+- Do NOT recommend any stocks from the database
+- Tell the user to visit these websites for latest IPOs:
+  1. nseindia.com
+  2. sebi.gov.in
+  3. moneycontrol.com
+  4. chittorgarh.com
+- Explain what an IPO is in 2-3 simple sentences
+- Explain the steps to apply for an IPO in India using
+  ASBA method through net banking or UPI
+- Keep the response focused only on IPOs
+- Add disclaimer: This is not financial advice.
+  Please consult a SEBI-registered advisor."""
         elif question_type == "portfolio_analysis":
             prompt = f"""User asked: {message}
 
@@ -732,8 +809,10 @@ def personal_chat(request):
             return Response({"error": "Chatbot is not configured. Missing GROQ_API_KEY."}, status=503)
 
         user = request.user
-        normalized = message.strip().lower()
-        if normalized in {"hi", "hello", "hey", "hey there", "good morning", "good evening"}:
+        normalized = re.sub(r"[^a-z]+", " ", message.lower()).strip()
+        greeting_tokens = {"hi", "hello", "hey", "hey there", "good morning", "good evening"}
+        first_token = normalized.split()[0] if normalized else ""
+        if normalized in greeting_tokens or first_token in {"hi", "hello", "hey"}:
             reply = "Hello! I'm StockSphere AI, your personal market assistant. How can I help you today?"
             return Response({
                 "mode": "personal",
@@ -749,11 +828,184 @@ def personal_chat(request):
                 return Response({"error": "Invalid portfolio_id"}, status=400)
 
         stocks = get_all_stocks_data()
-        found_stock = find_stock(stocks, message) or find_stock_in_db(message)
+        question_type = detect_question_type(message)
+        if question_type in ("sector_query", "buy_advice", "avoid_advice", "out_of_scope", "market_news", "ipo_query"):
+            found_stock = None
+        else:
+            found_stock = find_stock(stocks, message) or find_stock_in_db(message)
         question_type = detect_question_type(message)
         use_personal_context = True
         if question_type == "buy_advice" and not has_personal_terms(message):
             use_personal_context = False
+
+        pgvector_results = get_similar_stocks(stocks, message)
+
+        if question_type == "greeting":
+            reply = "Hello! I'm StockSphere AI, your personal market assistant. How can I help you today?"
+            return Response({
+                "mode": "personal",
+                "message": message,
+                "reply": reply,
+            })
+
+        if question_type == "market_news":
+            general_news = get_general_market_news()
+            news_headlines = format_news_context(
+                general_news,
+                label="Latest Indian Market News"
+            )
+            prompt = f"""User asked: {message}
+
+{news_headlines}
+
+Instructions:
+- ONLY talk about the news headlines listed above
+- Summarise each headline in 1-2 simple sentences
+- Do NOT mention portfolio, watchlist, or any user data
+- Do NOT suggest any stocks to buy
+- Do NOT mention recommended stocks at all
+- If no headlines are available say news is temporarily
+  unavailable and suggest checking moneycontrol.com
+- Add disclaimer: This is not financial advice."""
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": PERSONAL_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=800,
+                temperature=0.7,
+            )
+            return Response({
+                "mode": "personal",
+                "message": message,
+                "reply": response.choices[0].message.content,
+                "portfolio_stats": {
+                    "best_performing": None,
+                    "most_profitable": None,
+                    "highest_price_stock": None,
+                    "lowest_price_stock": None,
+                },
+                "recommendations": [],
+            })
+
+        if question_type == "sector_query":
+            msg_lower = message.lower()
+            sector_map = {
+                "it": "Nifty IT",
+                "tech": "Nifty IT",
+                "technology": "Nifty IT",
+                "software": "Nifty IT",
+                "metal": "Nifty Metal",
+                "steel": "Nifty Metal",
+                "energy": "Nifty Energy",
+                "power": "Nifty Energy",
+                "bank": "Nifty Bank",
+                "banking": "Nifty Bank",
+                "pharma": "Nifty Pharma",
+                "pharmaceutical": "Nifty Pharma",
+                "auto": "Nifty Auto",
+                "automobile": "Nifty Auto",
+                "fmcg": "Nifty FMCG",
+                "media": "Nifty Media",
+                "realty": "Nifty Realty",
+                "real estate": "Nifty Realty",
+                "financials": "Financials",
+                "finance": "Financials",
+                "healthcare": "Healthcare",
+                "consumer": "Consumer",
+            }
+            matched_sector = next(
+                (full for key, full in sector_map.items()
+                 if key in msg_lower),
+                None
+            )
+            sector_stocks = get_stocks_by_sector(
+                stocks, matched_sector or message
+            ) if matched_sector else []
+
+            if not sector_stocks:
+                sector_stocks = [
+                    s for s in stocks
+                    if any(
+                        word in str(s.get("sector", "")).lower()
+                        for word in msg_lower.split()
+                        if len(word) > 2
+                    )
+                ][:5]
+
+            if not sector_stocks:
+                sector_stocks = pgvector_results[:5]
+
+            sector_text = "\n".join([
+                f"- {s.get('symbol')} | {s.get('name')} | Rs{s.get('current_price')}"
+                for s in sector_stocks
+            ]) or "No specific sector stocks found."
+            prompt = f"""User asked: {message}
+
+Sector stocks from database:
+{sector_text}
+
+Instructions:
+- Explain the current outlook for this sector in India
+- Mention 2-3 stocks from the list as examples
+- Explain key factors affecting this sector
+- Add disclaimer about investment advice."""
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": PUBLIC_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=600,
+                temperature=0.7,
+            )
+            return Response({
+                "mode": "personal",
+                "message": message,
+                "question_type": "sector_query",
+                "stock_found": False,
+                "reply": response.choices[0].message.content,
+            })
+
+        if question_type == "ipo_query":
+            prompt = f"""User asked: {message}
+
+Instructions:
+- Do NOT mention any specific IPO company names
+- Do NOT recommend any stocks from the database
+- Tell the user to visit these websites for latest IPOs:
+  1. nseindia.com
+  2. sebi.gov.in
+  3. moneycontrol.com
+  4. chittorgarh.com
+- Explain what an IPO is in 2-3 simple sentences
+- Explain the steps to apply for an IPO in India using
+  ASBA method through net banking or UPI
+- Keep the response focused only on IPOs
+- Add disclaimer: This is not financial advice.
+  Please consult a SEBI-registered advisor."""
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": PERSONAL_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=800,
+                temperature=0.7,
+            )
+            return Response({
+                "mode": "personal",
+                "message": message,
+                "reply": response.choices[0].message.content,
+                "portfolio_stats": {
+                    "best_performing": None,
+                    "most_profitable": None,
+                    "highest_price_stock": None,
+                    "lowest_price_stock": None,
+                },
+                "recommendations": [],
+            })
 
         portfolio_items_qs = PortfolioItem.objects.filter(portfolio__user=user)
         if selected_portfolio_id is not None:
@@ -975,6 +1227,79 @@ def personal_chat(request):
                 "mode": "personal",
                 "message": message,
                 "reply": reply,
+                "portfolio_stats": {
+                    "best_performing": best_performing,
+                    "most_profitable": most_profitable,
+                    "highest_price_stock": highest_price_stock,
+                    "lowest_price_stock": lowest_price_stock,
+                },
+                "recommendations": recommended_stocks,
+            })
+
+        if question_type == "compare_stocks":
+            stopwords = {
+                "COMPARE", "VERSUS", "BETTER", "WHICH", "BETWEEN",
+                "AND", "THE", "FOR", "TOP", "BEST", "GOOD", "WITH",
+                "WHAT", "HOW", "ARE", "STOCK", "STOCKS", "INDIA"
+            }
+            symbols_in_msg = [
+                w.upper() for w in message.split()
+                if w.isalpha() and len(w) > 2
+                and w.upper() not in stopwords
+            ]
+            live_compare = []
+            unavailable_symbols = []
+            for sym in symbols_in_msg[:2]:
+                live = get_live_price(sym)
+                if live and live.get("live_price"):
+                    live_compare.append(
+                        f"{sym}: Live Rs{live['live_price']} | "
+                        f"52W High Rs{live['52w_high']} | "
+                        f"52W Low Rs{live['52w_low']}"
+                    )
+                else:
+                    unavailable_symbols.append(sym)
+
+            live_compare_text = (
+                "\n".join(live_compare)
+                if live_compare
+                else "No live data available for these stocks."
+            )
+
+            if unavailable_symbols:
+                unavailable_note = (
+                    "IMPORTANT: The following stocks have NO data "
+                    "in StockSphere: " + ", ".join(unavailable_symbols) +
+                    ". You MUST tell the user these stocks are not "
+                    "available and suggest checking nseindia.com"
+                )
+            else:
+                unavailable_note = ""
+
+            prompt = f"""User asked: {message}
+
+Live Prices:
+{live_compare_text}
+
+Instructions:
+{unavailable_note}
+- If any stock has no data, clearly say so first
+- Do NOT make up or guess data for unavailable stocks
+- Only compare stocks where live data was fetched above
+- Add disclaimer: This is not financial advice."""
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": PERSONAL_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=800,
+                temperature=0.7,
+            )
+            return Response({
+                "mode": "personal",
+                "message": message,
+                "reply": response.choices[0].message.content,
                 "portfolio_stats": {
                     "best_performing": best_performing,
                     "most_profitable": most_profitable,
