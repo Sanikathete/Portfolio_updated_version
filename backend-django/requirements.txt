@@ -85,6 +85,7 @@ tzlocal==5.3.1
 urllib3==2.6.3
 uuid_utils==0.14.1
 vine==5.1.0
+feedparser
 wcwidth==0.6.0
 xxhash==3.6.0
 yfinance==1.2.0
