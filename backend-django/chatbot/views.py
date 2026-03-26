@@ -86,6 +86,76 @@ def detect_question_type(message: str) -> str:
     return "general"
 
 
+def is_portfolio_performance_question(message: str) -> bool:
+    msg = message.lower()
+    return any(phrase in msg for phrase in [
+        "how is my portfolio",
+        "how's my portfolio",
+        "portfolio doing",
+        "portfolio performance",
+        "my portfolio doing",
+        "portfolio return",
+        "profit in my portfolio",
+        "loss in my portfolio",
+    ])
+
+
+def is_best_performer_question(message: str) -> bool:
+    msg = message.lower()
+    return any(phrase in msg for phrase in [
+        "best performing stock",
+        "best performer",
+        "top performing stock",
+        "which stock is performing best",
+        "which is my best",
+    ])
+
+
+def is_watchlist_suggestion_question(message: str) -> bool:
+    msg = message.lower()
+    return "watchlist" in msg and any(phrase in msg for phrase in [
+        "should i add",
+        "add anything",
+        "what should i add",
+        "what to add",
+        "add to my watchlist",
+    ])
+
+
+
+def has_personal_terms(message: str) -> bool:
+    msg = message.lower()
+    return any(term in msg for term in [
+        "my portfolio",
+        "my stocks",
+        "my holdings",
+        "my watchlist",
+        "portfolio",
+        "watchlist",
+        "holdings",
+    ])
+
+
+def format_recommended_stock(stock: dict) -> str:
+    symbol = stock.get("symbol", "")
+    name = stock.get("name", "")
+    sector = stock.get("sector", "Unknown")
+    try:
+        current_price = float(stock.get("current_price", 0) or 0)
+    except (TypeError, ValueError):
+        current_price = 0.0
+    return f"{name} ({symbol}) at Rs{current_price:.2f} in {sector}"
+
+
+def safe_float(value, default=0.0):
+    try:
+        if value in (None, ""):
+            return float(default)
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
 def get_live_price(symbol: str) -> dict:
     try:
         ticker = yf.Ticker(f"{symbol}.NS")
@@ -117,6 +187,12 @@ def build_live_price_context(symbol: str, db_price) -> str:
 def find_stock_in_db(message: str):
     from stocks.models import Stock
 
+    stock_field_names = {field.name for field in Stock._meta.fields}
+    has_pe_ratio = "pe_ratio" in stock_field_names
+    has_market_cap = "market_cap" in stock_field_names
+    has_week_52_high = "week_52_high" in stock_field_names
+    has_week_52_low = "week_52_low" in stock_field_names
+
     words = message.upper().split()
     for word in words:
         if len(word) > 2:
@@ -127,11 +203,11 @@ def find_stock_in_db(message: str):
                     "name": stock.name,
                     "sector": stock.sector,
                     "exchange": stock.exchange,
-                    "current_price": float(stock.current_price or 0),
-                    "pe_ratio": float(stock.pe_ratio or 0),
-                    "market_cap": float(stock.market_cap or 0) if stock.market_cap is not None else 0,
-                    "week_52_high": float(stock.week_52_high or 0) if stock.week_52_high is not None else 0,
-                    "week_52_low": float(stock.week_52_low or 0) if stock.week_52_low is not None else 0,
+                    "current_price": safe_float(stock.current_price, 0),
+                    "pe_ratio": safe_float(getattr(stock, "pe_ratio", None), 0) if has_pe_ratio else 0,
+                    "market_cap": safe_float(getattr(stock, "market_cap", None), 0) if has_market_cap else 0,
+                    "week_52_high": safe_float(getattr(stock, "week_52_high", None), 0) if has_week_52_high else 0,
+                    "week_52_low": safe_float(getattr(stock, "week_52_low", None), 0) if has_week_52_low else 0,
                     "currency": stock.currency,
                 }
     return None
@@ -140,20 +216,13 @@ def find_stock_in_db(message: str):
 def get_all_stocks_data():
     from stocks.models import Stock
 
+    base_fields = ["id", "symbol", "name", "sector", "exchange", "current_price", "currency"]
+    optional_fields = ["pe_ratio", "market_cap", "week_52_high", "week_52_low"]
+    stock_field_names = {field.name for field in Stock._meta.fields}
+    selected_fields = base_fields + [field for field in optional_fields if field in stock_field_names]
+
     return list(
-        Stock.objects.all().values(
-            "id",
-            "symbol",
-            "name",
-            "sector",
-            "exchange",
-            "current_price",
-            "pe_ratio",
-            "market_cap",
-            "week_52_high",
-            "week_52_low",
-            "currency",
-        )
+        Stock.objects.all().values(*selected_fields)
     )
 
 
@@ -280,9 +349,95 @@ def public_chat(request):
         return Response({"error": "Message is required"}, status=400)
 
     try:
+        normalized = message.strip().lower()
+        if normalized in {"hi", "hello", "hey", "hey there", "good morning", "good evening"}:
+            reply = "Hello! I'm StockSphere AI, your market assistant. How can I help you today?"
+            return Response({
+                "mode": "public",
+                "message": message,
+                "reply": reply,
+            })
+
         stocks = get_all_stocks_data()
         found_stock = find_stock(stocks, message) or find_stock_in_db(message)
         question_type = detect_question_type(message)
+        use_personal_context = True
+        if question_type == "buy_advice" and not has_personal_terms(message):
+            use_personal_context = False
+
+        if question_type == "market_news":
+            general_news = get_general_market_news()
+            stock_news_ctx = format_news_context(general_news, label="Latest Indian Market News")
+            prompt = f"""User asked: {message}
+
+{stock_news_ctx}
+
+Instructions:
+- Summarise the news headlines above in a friendly, helpful way
+- Explain briefly how this news might affect the market
+- Tell user they can ask about any specific stock for more details
+- Add disclaimer: This is not financial advice."""
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": PERSONAL_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=800,
+                temperature=0.7,
+            )
+            return Response({
+                "mode": "personal",
+                "message": message,
+                "reply": response.choices[0].message.content,
+                "portfolio_stats": {
+                    "best_performing": None,
+                    "most_profitable": None,
+                    "highest_price_stock": None,
+                    "lowest_price_stock": None,
+                },
+                "recommendations": [],
+            })
+
+        if question_type == "market_news":
+            general_news = get_general_market_news()
+            stock_news_ctx = format_news_context(general_news, label="Latest Indian Market News")
+            prompt = f"""User asked: {message}
+
+{stock_news_ctx}
+
+Instructions:
+- Summarise the news headlines above in a friendly, helpful way
+- Explain briefly how this news might affect the market
+- Tell user they can ask about any specific stock for more details
+- Add disclaimer: This is not financial advice."""
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": PUBLIC_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=600,
+                temperature=0.7,
+            )
+            return Response({
+                "mode": "public",
+                "message": message,
+                "question_type": question_type,
+                "stock_found": False,
+                "reply": response.choices[0].message.content,
+            })
+
+        if question_type == "greeting":
+            reply = (
+                "Hello! I'm StockSphere AI, your personal market assistant. "
+                "How can I help you today?"
+            )
+            return Response({
+                "mode": "personal",
+                "message": message,
+                "reply": reply,
+            })
         pgvector_results = get_similar_stocks(stocks, message)
 
         msg_lower = message.lower()
@@ -303,10 +458,6 @@ def public_chat(request):
             stock_news_ctx = format_news_context(
                 get_stock_news(symbol), label=f"Latest News for {symbol}"
             )
-
-        if question_type == "market_news":
-            general_news = get_general_market_news()
-            stock_news_ctx = format_news_context(general_news, label="Latest Indian Market News")
 
         if found_stock:
             stock_context = f"""
@@ -334,16 +485,6 @@ Instructions:
 - If price query: Clearly state the live price
 - If general info: Explain what the company does, sector, key metrics
 - Always add disclaimer: This is not financial advice."""
-        elif question_type == "market_news":
-            prompt = f"""User asked: {message}
-
-{stock_news_ctx}
-
-Instructions:
-- Summarise the news headlines above in a friendly, helpful way
-- Explain briefly how this news might affect the market
-- Tell user they can ask about any specific stock for more details
-- Add disclaimer: This is not financial advice."""
         elif question_type == "price_query":
             words = [w.upper() for w in message.split() if w.isalpha() and len(w) > 2]
             live_results = []
@@ -408,8 +549,12 @@ Instructions:
 - Always add: This is not financial advice. Do your own research and consult a SEBI-registered advisor."""
         elif question_type == "sector_query":
             sector_map = {
-                "it": "Information Technology", "tech": "Information Technology",
-                "banking": "Financial Services", "bank": "Financial Services",
+                "bank": "Financial Services",
+                "banking": "Financial Services",
+                "it": "Information Technology",
+                "tech": "Information Technology",
+                "software": "Information Technology",
+                "nse it": "Information Technology",
                 "pharma": "Healthcare", "auto": "Automobile",
                 "fmcg": "Fast Moving Consumer Goods", "energy": "Power",
                 "real estate": "Realty", "healthcare": "Healthcare",
@@ -446,6 +591,8 @@ Instructions:
                 live = get_live_price(sym)
                 if live:
                     live_compare.append(f"{sym} - Live: Rs{live['live_price']} | 52W H: Rs{live['52w_high']} | L: Rs{live['52w_low']}")
+                else:
+                    live_compare.append(f"{sym}: Live data not available in StockSphere. User should check nseindia.com for current price.")
 
             live_compare_text = "\n".join(live_compare) if live_compare else "Live prices not available for comparison."
             prompt = f"""User asked: {message}
@@ -515,11 +662,10 @@ Instructions:
             prompt = f"""User asked: {message}
 
 Instructions:
-- Answer questions about IPOs in India
-- Explain what an IPO is if needed
-- Mention that for latest upcoming IPOs users should check NSE, SEBI, and financial news sites
-- Do NOT suggest random stocks as IPO recommendations
-- Give general advice on how to evaluate and apply for IPOs
+- Explain what an IPO is and general steps to apply
+- Do NOT mention any specific IPO names or companies
+- Tell the user to check nseindia.com and sebi.gov.in for latest upcoming IPOs
+- Never guess or make up any IPO company names
 - Mention risks of IPO investing
 - Add disclaimer: This is not financial advice. Please consult a SEBI-registered advisor."""
         elif question_type == "portfolio_analysis":
@@ -582,14 +728,38 @@ def personal_chat(request):
         return Response({"error": "Message is required"}, status=400)
 
     try:
+        if not GROQ_API_KEY:
+            return Response({"error": "Chatbot is not configured. Missing GROQ_API_KEY."}, status=503)
+
         user = request.user
+        normalized = message.strip().lower()
+        if normalized in {"hi", "hello", "hey", "hey there", "good morning", "good evening"}:
+            reply = "Hello! I'm StockSphere AI, your personal market assistant. How can I help you today?"
+            return Response({
+                "mode": "personal",
+                "message": message,
+                "reply": reply,
+            })
+        portfolio_id_raw = request.query_params.get("portfolio_id")
+        selected_portfolio_id = None
+        if portfolio_id_raw not in (None, ""):
+            try:
+                selected_portfolio_id = int(portfolio_id_raw)
+            except (TypeError, ValueError):
+                return Response({"error": "Invalid portfolio_id"}, status=400)
+
         stocks = get_all_stocks_data()
         found_stock = find_stock(stocks, message) or find_stock_in_db(message)
         question_type = detect_question_type(message)
+        use_personal_context = True
+        if question_type == "buy_advice" and not has_personal_terms(message):
+            use_personal_context = False
 
-        portfolio_items = PortfolioItem.objects.filter(
-            portfolio__user=user
-        ).select_related("stock", "portfolio")
+        portfolio_items_qs = PortfolioItem.objects.filter(portfolio__user=user)
+        if selected_portfolio_id is not None:
+            portfolio_items_qs = portfolio_items_qs.filter(portfolio_id=selected_portfolio_id)
+
+        portfolio_items = portfolio_items_qs.select_related("stock", "portfolio")
         watchlist_items = WatchlistItem.objects.filter(
             watchlist__user=user
         ).select_related("stock", "watchlist")
@@ -677,40 +847,142 @@ def personal_chat(request):
             live_price_ctx = ""
             stock_news_ctx = ""
 
-        if portfolio_analysis:
-            portfolio_text = "User's Portfolio with Live Prices:\n" + "\n".join([
-                f"- {item['symbol']} | {item['name']} | Qty: {item['quantity']:g} | Bought @ Rs{item['avg_buy_price']:.2f} | "
-                f"Live: Rs{item['live_price']:.2f} | Profit: {item['profit_pct']:+.2f}% | "
-                f"Abs Profit: Rs{item['abs_profit']:.2f}"
-                for item in portfolio_analysis
-            ])
-        else:
-            portfolio_text = "User has no portfolio items yet."
+        if use_personal_context:
+            if portfolio_analysis:
+                portfolio_text = "User's Portfolio with Live Prices:\n" + "\n".join([
+                    f"- {item['symbol']} | {item['name']} | Qty: {item['quantity']:g} | Bought @ Rs{item['avg_buy_price']:.2f} | "
+                    f"Live: Rs{item['live_price']:.2f} | Profit: {item['profit_pct']:+.2f}% | "
+                    f"Abs Profit: Rs{item['abs_profit']:.2f}"
+                    for item in portfolio_analysis
+                ])
+            else:
+                portfolio_text = "User has no portfolio items yet."
 
-        if watchlist_items:
-            watchlist_text = "User's Watchlist:\n" + "\n".join([
-                f"- {item.stock.symbol} | {item.stock.name}"
-                for item in watchlist_items
-            ])
-        else:
-            watchlist_text = "User has no watchlist items yet."
+            if watchlist_items:
+                watchlist_text = "User's Watchlist:\n" + "\n".join([
+                    f"- {item.stock.symbol} | {item.stock.name}"
+                    for item in watchlist_items
+                ])
+            else:
+                watchlist_text = "User has no watchlist items yet."
 
-        if best_performing is not None:
-            portfolio_stats_text = (
-                "Portfolio Statistics:\n"
-                f"- Best Performing Stock: {best_performing['symbol']} at {best_performing['profit_pct']:+.2f}% profit\n"
-                f"- Most Profitable Stock: {most_profitable['symbol']} with Rs{most_profitable['abs_profit']:.2f} total profit\n"
-                f"- Highest Price Stock: {highest_price_stock['symbol']} at Rs{highest_price_stock['live_price']:.2f}\n"
-                f"- Lowest Price Stock: {lowest_price_stock['symbol']} at Rs{lowest_price_stock['live_price']:.2f}"
-            )
+            if best_performing is not None:
+                portfolio_stats_text = (
+                    "Portfolio Statistics:\n"
+                    f"- Best Performing Stock: {best_performing['symbol']} at {best_performing['profit_pct']:+.2f}% profit\n"
+                    f"- Most Profitable Stock: {most_profitable['symbol']} with Rs{most_profitable['abs_profit']:.2f} total profit\n"
+                    f"- Highest Price Stock: {highest_price_stock['symbol']} at Rs{highest_price_stock['live_price']:.2f}\n"
+                    f"- Lowest Price Stock: {lowest_price_stock['symbol']} at {lowest_price_stock['live_price']:.2f}"
+                )
+            else:
+                portfolio_stats_text = "No portfolio data available for analysis."
         else:
-            portfolio_stats_text = "No portfolio data available for analysis."
+            portfolio_text = "Personal portfolio context not requested."
+            watchlist_text = "Personal watchlist context not requested."
+            portfolio_stats_text = "No personal portfolio stats requested."
 
         recommendations_text = "Recommended Stocks to Buy:\n" + "\n".join([
             f"- {stock.get('symbol', '')} | {stock.get('name', '')} | "
-            f"Rs{float(stock.get('current_price', 0)):.2f} | Sector: {stock.get('sector', 'Unknown')}"
+            f"Rs{safe_float(stock.get('current_price', 0), 0):.2f} | Sector: {stock.get('sector', 'Unknown')}"
             for stock in recommended_stocks
         ])
+
+        if is_portfolio_performance_question(message):
+            if not portfolio_analysis:
+                reply = (
+                    "You do not have any portfolio holdings yet, so I cannot assess performance right now. "
+                    f"You could start by tracking stocks like {', '.join(stock.get('symbol', '') for stock in recommended_stocks[:3])}. "
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+            else:
+                total_invested = round(sum(item["avg_buy_price"] * item["quantity"] for item in portfolio_analysis), 2)
+                total_value = round(sum(item["live_price"] * item["quantity"] for item in portfolio_analysis), 2)
+                total_profit = round(total_value - total_invested, 2)
+                total_profit_pct = round((total_profit / total_invested) * 100, 2) if total_invested > 0 else 0
+
+                reply = (
+                    f"Your portfolio is currently worth Rs{total_value:.2f} against an invested value of Rs{total_invested:.2f}, "
+                    f"so your overall P/L is Rs{total_profit:.2f} ({total_profit_pct:+.2f}%). "
+                    f"Your best performing stock is {best_performing['name']} ({best_performing['symbol']}) at {best_performing['profit_pct']:+.2f}%, "
+                    f"and your highest absolute profit is in {most_profitable['name']} ({most_profitable['symbol']}) with Rs{most_profitable['abs_profit']:.2f}. "
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+
+            return Response({
+                "mode": "personal",
+                "message": message,
+                "reply": reply,
+                "portfolio_stats": {
+                    "best_performing": best_performing,
+                    "most_profitable": most_profitable,
+                    "highest_price_stock": highest_price_stock,
+                    "lowest_price_stock": lowest_price_stock,
+                },
+                "recommendations": recommended_stocks,
+            })
+
+        if is_best_performer_question(message):
+            if not best_performing:
+                reply = (
+                    "You do not have any portfolio holdings yet, so I cannot identify a best performing stock. "
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+            else:
+                reply = (
+                    f"Your best performing stock right now is {best_performing['name']} ({best_performing['symbol']}). "
+                    f"It is up {best_performing['profit_pct']:+.2f}% versus your average buy price, with an absolute profit of Rs{best_performing['abs_profit']:.2f}. "
+                    f"The live price is Rs{best_performing['live_price']:.2f}. "
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+
+            return Response({
+                "mode": "personal",
+                "message": message,
+                "reply": reply,
+                "portfolio_stats": {
+                    "best_performing": best_performing,
+                    "most_profitable": most_profitable,
+                    "highest_price_stock": highest_price_stock,
+                    "lowest_price_stock": lowest_price_stock,
+                },
+                "recommendations": recommended_stocks,
+            })
+
+        if is_watchlist_suggestion_question(message):
+            watchlist_symbols = {item.stock.symbol for item in watchlist_items}
+            portfolio_symbols = {item["symbol"] for item in portfolio_analysis}
+            fresh_ideas = [
+                stock for stock in recommended_stocks
+                if stock.get("symbol") not in watchlist_symbols and stock.get("symbol") not in portfolio_symbols
+            ][:3]
+
+            if fresh_ideas:
+                formatted = "; ".join(format_recommended_stock(stock) for stock in fresh_ideas)
+                reply = (
+                    f"Yes, you could consider adding these to your watchlist: {formatted}. "
+                    "They were picked from the current recommendation pool based on valuation and price-position signals, "
+                    "and they are not already in your portfolio or watchlist. "
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+            else:
+                reply = (
+                    "Your current watchlist and portfolio already cover the strongest candidates from the current recommendation pool, "
+                    "so I do not see an obvious additional watchlist idea right now. "
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+
+            return Response({
+                "mode": "personal",
+                "message": message,
+                "reply": reply,
+                "portfolio_stats": {
+                    "best_performing": best_performing,
+                    "most_profitable": most_profitable,
+                    "highest_price_stock": highest_price_stock,
+                    "lowest_price_stock": lowest_price_stock,
+                },
+                "recommendations": recommended_stocks,
+            })
 
         prompt = f"""User asked: {message}
 
@@ -735,6 +1007,7 @@ Instructions:
 - If question is about a specific stock: use the live price and news provided above
 - If question is about watchlist: comment on each watchlist stock and whether it looks like a good buy
 - If portfolio is empty: acknowledge it warmly and suggest starting with 2-3 stocks from recommended_stocks
+- If the user did not ask for personal context, do not mention their portfolio or watchlist.
 - Always use actual stock names, symbols, and real numbers from the data - never give generic vague answers
 - Always end with disclaimer: This is not financial advice. Please consult a SEBI-registered advisor.
 """

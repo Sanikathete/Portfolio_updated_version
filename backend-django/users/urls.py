@@ -7,6 +7,7 @@ from .views import (
     RegisterView,
     ResetPasswordView,
     SecurityQuestionView,
+    TelegramWebhookView,
 )
 
 urlpatterns = [
@@ -18,4 +19,5 @@ urlpatterns = [
     path('forgot-password/security/', ForgotPasswordSecurityView.as_view(), name='forgot_password_security'),
     path('reset-password/', ResetPasswordView.as_view(), name='reset_password'),
     path('security-question/', SecurityQuestionView.as_view(), name='security_question'),
+    path('telegram/webhook/', TelegramWebhookView.as_view(), name='telegram_webhook'),
 ]

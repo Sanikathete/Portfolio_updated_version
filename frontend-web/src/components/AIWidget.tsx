@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { usePortfolio } from '../context/PortfolioContext';
 
 const chatbotBaseURL =
   typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
@@ -15,6 +16,7 @@ interface Message {
 
 export const AIWidget: React.FC = () => {
   const { isAuthenticated, token } = useAuth();
+  const { selectedPortfolioId } = usePortfolio();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { role: 'ai', text: 'StockSphere AI is online. Ask about TCS analysis, portfolio moves, or market news.', time: 'now', agentType: 'general_agent' },
@@ -39,30 +41,35 @@ export const AIWidget: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${chatbotBaseURL}/api/chatbot/ask/`, {
+      const params = new URLSearchParams({ message: question });
+      if (selectedPortfolioId) {
+        params.set('portfolio_id', String(selectedPortfolioId));
+      }
+      const response = await fetch(`${chatbotBaseURL}/api/chatbot/personal-chat/?${params.toString()}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ question }),
       });
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to fetch a reply.');
+      }
       setMessages((current) => [
         ...current,
         {
           role: 'ai',
-          text: data.answer || data.response || 'No response received.',
+          text: data.reply || data.answer || data.response || data.error || 'No response received.',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           agentType: data.agent_type || 'general_agent',
         },
       ]);
-    } catch {
+    } catch (error: any) {
       setMessages((current) => [
         ...current,
         {
           role: 'ai',
-          text: 'Unable to reach the chatbot service right now.',
+          text: error?.message || 'Unable to reach the chatbot service right now.',
           time: '--',
           agentType: 'general_agent',
         },

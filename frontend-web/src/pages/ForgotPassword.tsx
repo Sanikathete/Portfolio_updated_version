@@ -181,7 +181,7 @@ const ForgotPassword: React.FC = () => {
                 <p className="mt-2 text-sm text-slate-400">We&apos;ll send a password reset code to your Telegram (@StockSphereBot).</p>
               </div>
               <div className="rounded-2xl border border-violet-400/20 bg-violet-500/10 px-4 py-4 text-sm text-violet-100">
-                Make sure you have started a chat with @StockSphereBot on Telegram.
+                Make sure you have messaged @StockSphereBot from the same Telegram username you registered with.
               </div>
               <button
                 type="button"

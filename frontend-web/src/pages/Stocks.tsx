@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import axios from '../api/axios';
 import { PageLayout } from '../components/PageLayout';
 import { SectionHeader } from '../components/SectionHeader';
+import { RatingBadge } from '../components/RatingBadge';
+import { SentimentBadge } from '../components/SentimentBadge';
+import { useCurrency } from '../context/CurrencyContext';
+import { usePortfolio } from '../context/PortfolioContext';
+import { getRating, getSentimentLabel } from '../utils/pageUtils';
 
 interface Stock {
   id: number;
@@ -56,9 +63,13 @@ const niftySectorToDbSectors: Record<string, string[]> = {
 };
 
 const Stocks: React.FC = () => {
+  const navigate = useNavigate();
+  const { formatFromCurrency } = useCurrency();
+  const { selectedPortfolioId } = usePortfolio();
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [watchlistedSymbols, setWatchlistedSymbols] = useState<Set<string>>(new Set());
   const [addingSymbol, setAddingSymbol] = useState<string | null>(null);
+  const [analyzingSymbol, setAnalyzingSymbol] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -173,6 +184,26 @@ const Stocks: React.FC = () => {
     }
   };
 
+  const addToSelectedPortfolio = async (symbol: string) => {
+    if (!selectedPortfolioId) {
+      toast.error('Please select a portfolio first.');
+      return;
+    }
+
+    setAnalyzingSymbol(symbol);
+    try {
+      await axios.post(`/api/portfolio/${selectedPortfolioId}/add_stock/`, {
+        stock_symbol: symbol,
+        quantity: 1,
+      });
+      toast.success(`${symbol} added to the selected portfolio.`);
+    } catch {
+      toast.error(`Failed to add ${symbol} to the selected portfolio.`);
+    } finally {
+      setAnalyzingSymbol(null);
+    }
+  };
+
   return (
     <PageLayout title="NSE Stocks">
       <SectionHeader
@@ -194,8 +225,9 @@ const Stocks: React.FC = () => {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gridTemplateColumns: 'minmax(220px, 1fr) minmax(220px, 1fr) auto',
               gap: 12,
+              alignItems: 'center',
             }}
           >
             <input
@@ -217,6 +249,15 @@ const Stocks: React.FC = () => {
                 </option>
               ))}
             </select>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate('/portfolio/recommend')}
+              style={{ whiteSpace: 'nowrap', justifySelf: 'end' }}
+            >
+              Recommend
+            </button>
           </div>
 
           <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
@@ -283,50 +324,75 @@ const Stocks: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      width: 'fit-content',
-                      padding: '5px 10px',
-                      borderRadius: 999,
-                      background: 'rgba(167, 139, 250, 0.12)',
-                      border: '1px solid rgba(167, 139, 250, 0.2)',
-                      color: 'var(--purple)',
-                      fontSize: 10,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {stock.sector}
-                  </span>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        width: 'fit-content',
+                        padding: '5px 10px',
+                        borderRadius: 999,
+                        background: 'rgba(167, 139, 250, 0.12)',
+                        border: '1px solid rgba(167, 139, 250, 0.2)',
+                        color: 'var(--purple)',
+                        fontSize: 10,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {stock.sector}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <RatingBadge rating={getRating(stock)} />
+                      <SentimentBadge sentiment={getSentimentLabel(stock)} />
+                    </div>
+                  </div>
 
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Current Price</div>
                     <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {stock.currency === 'INR' ? `₹${stock.current_price}` : `${stock.currency} ${stock.current_price}`}
+                      {formatFromCurrency(Number(stock.current_price || 0), stock.currency)}
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => void addToWatchlist(stock.symbol)}
-                  disabled={watchlistedSymbols.has(stock.symbol) || addingSymbol === stock.symbol}
-                  style={{
-                    marginTop: 'auto',
-                    padding: '8px 12px',
-                    borderRadius: 10,
-                    border: watchlistedSymbols.has(stock.symbol) ? '1px solid rgba(46, 204, 113, 0.28)' : '1px solid var(--border)',
-                    background: watchlistedSymbols.has(stock.symbol) ? 'rgba(46, 204, 113, 0.14)' : 'transparent',
-                    color: watchlistedSymbols.has(stock.symbol) ? 'var(--green)' : 'var(--text-secondary)',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    cursor: watchlistedSymbols.has(stock.symbol) || addingSymbol === stock.symbol ? 'default' : 'pointer',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  {addingSymbol === stock.symbol ? 'Adding...' : watchlistedSymbols.has(stock.symbol) ? '✓ Watchlisted' : '+ Watchlist'}
-                </button>
+                <div style={{ marginTop: 'auto', display: 'grid', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => void addToWatchlist(stock.symbol)}
+                    disabled={watchlistedSymbols.has(stock.symbol) || addingSymbol === stock.symbol}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 10,
+                      border: watchlistedSymbols.has(stock.symbol) ? '1px solid rgba(46, 204, 113, 0.28)' : '1px solid var(--border)',
+                      background: watchlistedSymbols.has(stock.symbol) ? 'rgba(46, 204, 113, 0.14)' : 'transparent',
+                      color: watchlistedSymbols.has(stock.symbol) ? 'var(--green)' : 'var(--text-secondary)',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: watchlistedSymbols.has(stock.symbol) || addingSymbol === stock.symbol ? 'default' : 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    {addingSymbol === stock.symbol ? 'Adding...' : watchlistedSymbols.has(stock.symbol) ? '✓ Watchlisted' : '+ Watchlist'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void addToSelectedPortfolio(stock.symbol)}
+                    disabled={analyzingSymbol === stock.symbol}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 10,
+                      border: '1px solid rgba(126, 184, 247, 0.28)',
+                      background: 'rgba(126, 184, 247, 0.12)',
+                      color: 'var(--accent-blue)',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: analyzingSymbol === stock.symbol ? 'default' : 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    {analyzingSymbol === stock.symbol ? 'Adding to Portfolio...' : 'Add Stock to Portfolio'}
+                  </button>
+                </div>
               </article>
             ))}
           </div>

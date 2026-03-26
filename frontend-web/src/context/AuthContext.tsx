@@ -3,6 +3,12 @@ import type { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 
 import axios from '../api/axios';
+import {
+  clearStoredAuth,
+  decodeJwtPayload,
+  getValidStoredToken,
+  storeAuthSession,
+} from '../utils/auth';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -24,7 +30,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 const getInitialAuthState = (): AuthState => {
-  const token = localStorage.getItem('token');
+  const token = getValidStoredToken();
   const username = localStorage.getItem('username');
   const storedUserId = localStorage.getItem('user_id');
 
@@ -36,14 +42,6 @@ const getInitialAuthState = (): AuthState => {
   };
 };
 
-const decodeJwtPayload = (token: string) => {
-  try {
-    return JSON.parse(atob(token.split('.')[1]));
-  } catch {
-    return null;
-  }
-};
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const initialState = getInitialAuthState();
   const [token, setToken] = useState<string | null>(initialState.token);
@@ -53,32 +51,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const restoredState = getInitialAuthState();
+    const syncAuthState = () => {
+      const restoredState = getInitialAuthState();
+      setToken(restoredState.token);
+      setUserId(restoredState.userId);
+      setUsername(restoredState.username);
+      setIsAuthenticated(restoredState.isAuthenticated);
+      setLoading(false);
+    };
 
-    setToken(restoredState.token);
-    setUserId(restoredState.userId);
-    setUsername(restoredState.username);
-    setIsAuthenticated(restoredState.isAuthenticated);
-    setLoading(false);
+    syncAuthState();
+    window.addEventListener('auth-changed', syncAuthState);
+    window.addEventListener('storage', syncAuthState);
+
+    return () => {
+      window.removeEventListener('auth-changed', syncAuthState);
+      window.removeEventListener('storage', syncAuthState);
+    };
   }, []);
 
   const login = async (uname: string, password: string) => {
     const res = await axios.post('/api/users/login/', { username: uname, password });
     const payload = res.data ?? {};
     const t = payload.access;
+    const refreshToken = payload.refresh;
     const decoded = t ? decodeJwtPayload(t) : null;
     const user_id = payload.user_id ?? decoded?.user_id ?? null;
     const u = payload.username ?? uname;
 
-    if (!t) throw new Error('Authentication token missing from response');
+    if (!t || !refreshToken) throw new Error('Authentication tokens missing from response');
 
-    localStorage.setItem('token', t);
-    localStorage.setItem('username', u);
-    if (user_id !== null && user_id !== undefined) {
-      localStorage.setItem('user_id', String(user_id));
-    } else {
-      localStorage.removeItem('user_id');
-    }
+    storeAuthSession({
+      token: t,
+      refreshToken,
+      username: u,
+      userId: user_id,
+    });
 
     setToken(t);
     setUserId(user_id);
@@ -88,7 +96,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
-    ['token', 'user_id', 'username'].forEach((k) => localStorage.removeItem(k));
+    clearStoredAuth();
     setToken(null);
     setUserId(null);
     setUsername(null);
@@ -108,7 +116,6 @@ export const useAuth = () => useContext(AuthContext);
 
 export const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const { isAuthenticated, loading } = useAuth();
-  const hasToken = !!localStorage.getItem('token');
 
   if (loading) {
     return (
@@ -121,7 +128,7 @@ export const ProtectedRoute = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  if (!isAuthenticated && !hasToken) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 

@@ -109,6 +109,10 @@ const Growth: React.FC = () => {
     return acc;
   }, {})).filter((item) => item.value > 0);
   const sectorChartData = sectorData.length ? sectorData : [{ name: 'No Data', value: 1 }];
+  const growthTrendData = useMemo(
+    () => normalized.map((item) => ({ symbol: item.symbol, growth: Number(item.growth.toFixed(2)) })),
+    [normalized],
+  );
 
   return (
     <PageLayout title="Growth">
@@ -144,7 +148,7 @@ const Growth: React.FC = () => {
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Discount by Holding</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Compares upside or discount percentage across each holding in the portfolio.</div>
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={[...normalized].sort((a, b) => b.discount - a.discount)}>
+                <BarChart data={[...normalized].sort((a, b) => b.discount - a.discount)} margin={{ top: 8, right: 8, left: 0, bottom: 12 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="symbol" tick={{ fill: '#5a5080', fontSize: 10 }} />
                   <YAxis tick={{ fill: '#5a5080', fontSize: 10 }} />
@@ -159,12 +163,20 @@ const Growth: React.FC = () => {
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Growth Trend by Holding</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Plots relative growth momentum for the current portfolio holdings.</div>
             <ResponsiveContainer width="100%" height={280}>
-              <ScatterChart>
+              <ScatterChart margin={{ top: 8, right: 8, left: 0, bottom: 28 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis type="number" dataKey="x" tick={{ fill: '#5a5080', fontSize: 10 }} />
-                <YAxis type="number" dataKey="y" tick={{ fill: '#5a5080', fontSize: 10 }} />
+                <XAxis
+                  type="category"
+                  dataKey="symbol"
+                  tick={{ fill: '#5a5080', fontSize: 10 }}
+                  interval={0}
+                  angle={-20}
+                  textAnchor="end"
+                  height={48}
+                />
+                <YAxis type="number" dataKey="growth" tick={{ fill: '#5a5080', fontSize: 10 }} />
                 <Tooltip />
-                <Scatter data={normalized.map((item, index) => ({ x: index + 1, y: item.growth }))} fill="#a78bfa" line isAnimationActive={false} />
+                <Scatter data={growthTrendData} fill="#a78bfa" line isAnimationActive={false} />
               </ScatterChart>
             </ResponsiveContainer>
           </div>

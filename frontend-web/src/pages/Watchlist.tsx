@@ -3,6 +3,9 @@ import toast from 'react-hot-toast';
 import axios from '../api/axios';
 import { PageLayout } from '../components/PageLayout';
 import { SectionHeader } from '../components/SectionHeader';
+import { RatingBadge } from '../components/RatingBadge';
+import { SentimentBadge } from '../components/SentimentBadge';
+import { getRating, getSentimentLabel } from '../utils/pageUtils';
 
 interface WatchlistStock {
   id: number;
@@ -107,22 +110,28 @@ const Watchlist: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      width: 'fit-content',
-                      padding: '5px 10px',
-                      borderRadius: 999,
-                      background: 'rgba(167, 139, 250, 0.12)',
-                      border: '1px solid rgba(167, 139, 250, 0.2)',
-                      color: 'var(--purple)',
-                      fontSize: 10,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {item.stock.sector}
-                  </span>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        width: 'fit-content',
+                        padding: '5px 10px',
+                        borderRadius: 999,
+                        background: 'rgba(167, 139, 250, 0.12)',
+                        border: '1px solid rgba(167, 139, 250, 0.2)',
+                        color: 'var(--purple)',
+                        fontSize: 10,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {item.stock.sector}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <RatingBadge rating={getRating(item.stock)} />
+                      <SentimentBadge sentiment={getSentimentLabel(item.stock)} />
+                    </div>
+                  </div>
 
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Current Price</div>

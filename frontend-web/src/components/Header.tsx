@@ -140,7 +140,9 @@ const LiveTickerMini: React.FC = () => {
   const [stocks, setStocks] = useState<any[]>([]);
 
   useEffect(() => {
-    axios.get('/api/stocks/?limit=20').then((response) => {
+    axios.get('/api/stocks/public-stocks/', {
+      params: { limit: 20, include_change: 1, refresh: 1 },
+    }).then((response) => {
       const data = response.data?.results || response.data || [];
       setStocks(Array.isArray(data) ? data.slice(0, 20) : []);
     }).catch(() => {});

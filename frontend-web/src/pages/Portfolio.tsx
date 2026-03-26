@@ -6,7 +6,7 @@ import { SectionHeader } from '../components/SectionHeader';
 import { SentimentBadge } from '../components/SentimentBadge';
 import { RatingBadge } from '../components/RatingBadge';
 import { usePortfolio } from '../context/PortfolioContext';
-import { getRating, getCompanyName, getPrice } from '../utils/pageUtils';
+import { getRating, getCompanyName, getPrice, getSentimentLabel } from '../utils/pageUtils';
 import { seededNumber } from '../utils/forecastHelpers';
 
 const Portfolio: React.FC = () => {
@@ -60,6 +60,7 @@ const Portfolio: React.FC = () => {
               <tr>
                 <th>Stock Name</th>
                 <th>Ticker</th>
+                <th>Live Price</th>
                 <th>Rating</th>
                 <th>Sentiment</th>
                 <th>3M Forecast</th>
@@ -76,8 +77,9 @@ const Portfolio: React.FC = () => {
                   <tr key={stock.symbol}>
                     <td>{getCompanyName(stock)}</td>
                     <td>{stock.symbol}</td>
+                    <td>{Number(getPrice(stock) || 0).toFixed(2)}</td>
                     <td><RatingBadge rating={rating} /></td>
-                    <td><SentimentBadge sentiment={String(stock.sentiment || 'Neutral')} /></td>
+                    <td><SentimentBadge sentiment={getSentimentLabel(stock)} /></td>
                     <td style={{ color: 'var(--green)' }}>+ {row.forecast3m.toFixed(1)}%</td>
                     <td style={{ color: 'var(--green)' }}>+ {row.forecast1y.toFixed(1)}%</td>
                     <td style={{ color: row.perf5y >= 0 ? 'var(--green)' : 'var(--red)' }}>
@@ -93,7 +95,7 @@ const Portfolio: React.FC = () => {
               })}
               {!rows.length ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Please select a portfolio from Dashboard</td>
+                  <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Please select a portfolio from Dashboard</td>
                 </tr>
               ) : null}
             </tbody>

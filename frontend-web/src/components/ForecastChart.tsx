@@ -16,7 +16,7 @@ interface ForecastChartProps {
   showArea?: boolean;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, convertPrice, currencySymbol }: any) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="chart-tooltip" style={{ padding: '10px 14px' }}>
@@ -24,7 +24,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
       {payload.map((p: any, i: number) => (
         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12 }}>
           <span style={{ color: p.color }}>{p.name}</span>
-          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{p.value !== null && p.value !== undefined ? Number(p.value).toFixed(2) : '—'}</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+            {p.value !== null && p.value !== undefined
+              ? `${currencySymbol}${convertPrice(Number(p.value)).toFixed(2)}`
+              : '—'}
+          </span>
         </div>
       ))}
     </div>
@@ -64,18 +68,18 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({ data, title, heigh
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="date" tickFormatter={(value) => formatDateShort(value)} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={{ stroke: 'var(--border)' }} interval="preserveStartEnd" minTickGap={60} />
           <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${currencySymbol}${convertPrice(Number(v)).toFixed(0)}`} width={70} />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip convertPrice={convertPrice} currencySymbol={currencySymbol} />} />
           <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: 'var(--text-muted)', paddingTop: 12 }} />
           {splitIndex >= 0 ? <ReferenceLine x={data[splitIndex]?.date} stroke="var(--text-muted)" strokeDasharray="4 4" label={{ value: 'Today', position: 'top', fontSize: 10, fill: 'var(--text-muted)' }} /> : null}
           {showArea ? (
             <>
-              <Area type="monotone" dataKey="actual" name="Actual Price" stroke="#1abc9c" strokeWidth={2} fill="url(#gradActual)" dot={false} connectNulls={false} />
-              <Area type="monotone" dataKey="predicted" name="Predicted Price" stroke="#f39c12" strokeWidth={2} strokeDasharray="6 3" fill="url(#gradPredicted)" dot={false} connectNulls />
+              <Area type="monotone" dataKey="actual" name="Actual Price" stroke="#1abc9c" strokeWidth={2} fill="url(#gradActual)" dot={false} connectNulls={false} isAnimationActive={false} />
+              <Area type="monotone" dataKey="predicted" name="Predicted Price" stroke="#f39c12" strokeWidth={2} strokeDasharray="6 3" fill="url(#gradPredicted)" dot={false} connectNulls isAnimationActive={false} />
             </>
           ) : (
             <>
-              <Line type="monotone" dataKey="actual" name="Actual Price" stroke="#1abc9c" strokeWidth={2} dot={false} connectNulls={false} />
-              <Line type="monotone" dataKey="predicted" name="Predicted Price" stroke="#f39c12" strokeWidth={2} strokeDasharray="6 3" dot={false} connectNulls />
+              <Line type="monotone" dataKey="actual" name="Actual Price" stroke="#1abc9c" strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
+              <Line type="monotone" dataKey="predicted" name="Predicted Price" stroke="#f39c12" strokeWidth={2} strokeDasharray="6 3" dot={false} connectNulls isAnimationActive={false} />
             </>
           )}
         </ComposedChart>

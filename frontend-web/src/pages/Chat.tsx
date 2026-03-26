@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import api from '../api/axios';
 import Layout from '../components/Layout';
+import { usePortfolio } from '../context/PortfolioContext';
 
 interface Message {
   id: number;
@@ -20,6 +21,7 @@ const conversations = [
 const quickPrompts = ['What is TCS stock?', 'Show my portfolio', 'Best stocks today'];
 
 const Chat = () => {
+  const { selectedPortfolioId } = usePortfolio();
   const [activeConversation, setActiveConversation] = useState(1);
   const [messages, setMessages] = useState<Message[]>([
     { id: 1, sender: 'ai', text: 'StockSphere AI is online. Ask about holdings, forecasts, sentiment, or compare assets.' },
@@ -40,12 +42,13 @@ const Chat = () => {
     setLoading(true);
 
     try {
-      const response = await api.post(
-        '/api/api/chatbot/public-chat/',
-        null,
-        { params: { message: question } }
-      );
-      const reply = response.data.reply ?? 'Sorry, I could not process your request.';
+      const response = await api.post('/api/api/chatbot/personal-chat/', null, {
+        params: {
+          message: question,
+          portfolio_id: selectedPortfolioId || undefined,
+        },
+      });
+      const reply = response.data.reply ?? response.data.error ?? 'Sorry, I could not process your request.';
       setMessages((current) => [...current, { id: Date.now() + 1, sender: 'ai', text: reply }]);
     } catch (error) {
       console.error(error);
@@ -54,7 +57,7 @@ const Chat = () => {
         {
           id: Date.now() + 1,
           sender: 'ai',
-          text: `Mock insight: ${question} currently screens as a medium-volatility idea with constructive sentiment and modest upside.`,
+          text: 'Unable to reach the chatbot service right now.',
         },
       ]);
     } finally {

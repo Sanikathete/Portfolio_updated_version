@@ -44,21 +44,23 @@ const Compare: React.FC = () => {
         { name: 'Bitcoin', type: 'Crypto', price: 87000, pe: 0, benefit: 82, marketReturn: 18, linear: 20, arima: 22, performance: 28 },
       ];
       setAssets(all);
-      if (!a && all[0]) setA(all[0].name);
-      if (!b && all[1]) setB(all[1].name);
+      setA((current) => current || all[0]?.name || '');
+      setB((current) => current || all[1]?.name || all[0]?.name || '');
     };
     void load();
-  }, [selectedPortfolioId, a, b]);
+  }, [selectedPortfolioId]);
 
   const assetA = assets.find((item) => item.name === a) || assets[0];
   const assetB = assets.find((item) => item.name === b) || assets[1];
-  const radarData = assetA && assetB ? [
-    { metric: 'Benefit Score', A: assetA.benefit, B: assetB.benefit },
-    { metric: 'Market Return', A: assetA.marketReturn, B: assetB.marketReturn },
-    { metric: 'Linear Return', A: assetA.linear, B: assetB.linear },
-    { metric: 'ARIMA Return', A: assetA.arima, B: assetB.arima },
-    { metric: 'PE Score', A: assetA.pe || 5, B: assetB.pe || 5 },
-  ] : [];
+  const radarData = useMemo(() => (
+    assetA && assetB ? [
+      { metric: 'Benefit Score', A: assetA.benefit, B: assetB.benefit },
+      { metric: 'Market Return', A: assetA.marketReturn, B: assetB.marketReturn },
+      { metric: 'Linear Return', A: assetA.linear, B: assetB.linear },
+      { metric: 'ARIMA Return', A: assetA.arima, B: assetB.arima },
+      { metric: 'PE Score', A: assetA.pe || 5, B: assetB.pe || 5 },
+    ] : []
+  ), [assetA, assetB]);
   const ranking = useMemo(() => [...assets].sort((x, y) => y.benefit - x.benefit), [assets]);
 
   return (
@@ -80,14 +82,14 @@ const Compare: React.FC = () => {
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Price Comparison</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Compares the current market price of the two selected assets.</div>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={[{ label: 'Price', A: assetA?.price || 0, B: assetB?.price || 0 }]}>
+                <BarChart data={[{ label: 'Price', A: assetA?.price || 0, B: assetB?.price || 0 }]} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="label" tick={{ fill: '#5a5080', fontSize: 10 }} />
                   <YAxis tick={{ fill: '#5a5080', fontSize: 10 }} />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="A" fill="#7c3aed" />
-                  <Bar dataKey="B" fill="#f0b429" />
+                  <Bar dataKey="A" fill="#7c3aed" isAnimationActive={false} />
+                  <Bar dataKey="B" fill="#f0b429" isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -95,12 +97,12 @@ const Compare: React.FC = () => {
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Multi-Factor Score Comparison</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Shows how both selected assets compare across benefit, return, and valuation metrics.</div>
               <ResponsiveContainer width="100%" height={300}>
-                <RadarChart data={radarData}>
+                <RadarChart data={radarData} outerRadius="70%">
                   <PolarGrid stroke="#1e1a3a" />
                   <PolarAngleAxis dataKey="metric" tick={{ fill: '#5a5080', fontSize: 10 }} />
                   <Legend />
-                  <Radar dataKey="A" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.2} />
-                  <Radar dataKey="B" stroke="#f0b429" fill="#f0b429" fillOpacity={0.2} />
+                  <Radar dataKey="A" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.2} isAnimationActive={false} />
+                  <Radar dataKey="B" stroke="#f0b429" fill="#f0b429" fillOpacity={0.2} isAnimationActive={false} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>

@@ -1,14 +1,55 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import {
+  clearStoredAuth,
+  getValidStoredRefreshToken,
+  getValidStoredToken,
+  storeAuthSession,
+} from '../utils/auth';
 
 const normalizeApiPath = (url?: string) => {
   if (!url) return url;
   return url.replace(/^\/api\/api\//, '/api/');
 };
 
-const attachToken = (config: any) => {
-  const token = localStorage.getItem('token');
+let refreshPromise: Promise<string | null> | null = null;
+
+const refreshAccessToken = async () => {
+  if (refreshPromise) return refreshPromise;
+
+  const refreshToken = getValidStoredRefreshToken();
+  if (!refreshToken) return null;
+
+  refreshPromise = axios.post('/api/users/token/refresh/', { refresh: refreshToken }, {
+    baseURL: '',
+    timeout: 30000,
+  }).then((response) => {
+    const nextToken = response.data?.access;
+    if (!nextToken) {
+      clearStoredAuth();
+      return null;
+    }
+
+    storeAuthSession({ token: nextToken });
+    return nextToken;
+  }).catch(() => {
+    clearStoredAuth();
+    return null;
+  }).finally(() => {
+    refreshPromise = null;
+  });
+
+  return refreshPromise;
+};
+
+const attachToken = async (config: any) => {
+  let token = getValidStoredToken();
   config.url = normalizeApiPath(config.url);
+
+  if (!token && getValidStoredRefreshToken()) {
+    token = await refreshAccessToken();
+  }
+
   if (token) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
@@ -18,8 +59,26 @@ const attachToken = (config: any) => {
 
 const handleError = (err: any) => {
   const status = err?.response?.status;
+  const hadAuthHeader = Boolean(err?.config?.headers?.Authorization);
+  const originalRequest = err?.config;
 
   if (status === 401) {
+    if (hadAuthHeader && originalRequest && !originalRequest._retry) {
+      originalRequest._retry = true;
+      return refreshAccessToken().then((token) => {
+        if (!token) {
+          return Promise.reject(err);
+        }
+
+        originalRequest.headers = originalRequest.headers ?? {};
+        originalRequest.headers.Authorization = `Bearer ${token}`;
+        return axios(originalRequest);
+      });
+    }
+
+    if (hadAuthHeader && localStorage.getItem('token')) {
+      clearStoredAuth();
+    }
     return Promise.reject(err);
   } else if (status === 500) {
     toast.error('Server error. Please try again.');

@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .models import Portfolio, PortfolioItem
 from stocks.models import Stock
+from stocks.live_prices import get_live_stock_quote, sync_stock_prices
 
 
 class StockMiniSerializer(serializers.ModelSerializer):
@@ -60,6 +61,16 @@ class PortfolioDetailView(generics.RetrieveUpdateDestroyAPIView):
             "items__stock"
         )
 
+    def retrieve(self, request, *args, **kwargs):
+        portfolio = self.get_object()
+        stock_ids = list(portfolio.items.values_list("stock_id", flat=True))
+        if stock_ids:
+            sync_stock_prices(queryset=Stock.objects.filter(id__in=stock_ids))
+            portfolio = self.get_queryset().get(pk=portfolio.pk)
+
+        serializer = self.get_serializer(portfolio)
+        return Response(serializer.data)
+
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -85,7 +96,8 @@ def add_stock_to_portfolio(request, pk):
         return Response({"error": "Stock not found"}, status=status.HTTP_404_NOT_FOUND)
 
     if not buy_price:
-        buy_price = stock.current_price
+        quote = get_live_stock_quote(stock.symbol, stock.exchange)
+        buy_price = quote.get("price") or stock.current_price
 
     item, created = PortfolioItem.objects.get_or_create(
         portfolio=portfolio,

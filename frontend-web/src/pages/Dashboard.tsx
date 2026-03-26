@@ -5,12 +5,14 @@ import axios from '../api/axios';
 import { PageLayout } from '../components/PageLayout';
 import { SectionHeader } from '../components/SectionHeader';
 import { StatCard } from '../components/StatCard';
+import { SentimentBadge } from '../components/SentimentBadge';
 import { SkeletonTable } from '../components/SkeletonTable';
 import { usePortfolio } from '../context/PortfolioContext';
 import { useCurrency } from '../context/CurrencyContext';
-import { getCompanyName, getPrice, getSector } from '../utils/pageUtils';
+import { getCompanyName, getPrice, getSector, getSentimentLabel } from '../utils/pageUtils';
 import { seededNumber } from '../utils/forecastHelpers';
 import { INDIAN_STOCKS } from '../data/mockData';
+import { chartTooltipStyle } from '../utils/chart';
 
 const sectorColors = ['#7eb8f7', '#f39c12', '#2ecc71', '#e74c3c', '#a78bfa', '#1abc9c', '#f0b429'];
 const marketSectors: Record<string, string[]> = {
@@ -65,6 +67,25 @@ const buildAnalysisDelta = (seedKey: string, fallback = 0) => {
   if (Math.abs(fallback) > 0.01) return fallback;
   const random = seededNumber(seedKey);
   return Number((-6 + random() * 18).toFixed(2));
+};
+
+const dashboardTooltipProps = {
+  contentStyle: {
+    ...chartTooltipStyle,
+    background: '#f8f7fc',
+    border: '1px solid #3a2f70',
+    color: '#17122b',
+  },
+  labelStyle: {
+    color: '#17122b',
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  itemStyle: {
+    color: '#17122b',
+    fontSize: 12,
+    fontWeight: 600,
+  },
 };
 
 const Dashboard: React.FC = () => {
@@ -197,6 +218,7 @@ const Dashboard: React.FC = () => {
         pnl,
         value,
         sector: getSector(stock),
+        sentiment: getSentimentLabel(stock),
       };
     }).filter((item) => item.symbol);
   }, [holdings]);
@@ -399,6 +421,7 @@ const Dashboard: React.FC = () => {
                   <tr>
                     <th>Symbol</th>
                     <th>Company</th>
+                    <th>Sentiment</th>
                     <th>Qty</th>
                     <th>Buy Price</th>
                     <th>Current Price</th>
@@ -414,6 +437,7 @@ const Dashboard: React.FC = () => {
                     <tr key={item.symbol}>
                       <td>{item.symbol}</td>
                       <td>{item.company}</td>
+                      <td><SentimentBadge sentiment={item.sentiment} /></td>
                       <td>{item.quantity}</td>
                       <td>{format(item.buyPrice)}</td>
                       <td>{format(item.currentPrice)}</td>
@@ -435,7 +459,7 @@ const Dashboard: React.FC = () => {
                   ))}
                   {!normalizedHoldings.length ? (
                     <tr>
-                      <td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No holdings in the selected portfolio.</td>
+                      <td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No holdings in the selected portfolio.</td>
                     </tr>
                   ) : null}
                 </tbody>
@@ -455,7 +479,7 @@ const Dashboard: React.FC = () => {
                 <Pie data={sectorAllocationData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={92} paddingAngle={2} isAnimationActive={false} stroke="rgba(124,58,237,0.25)">
                   {sectorAllocationData.map((entry, index) => <Cell key={entry.name} fill={sectorColors[index % sectorColors.length]} />)}
                 </Pie>
-                <Tooltip />
+                <Tooltip {...dashboardTooltipProps} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -466,7 +490,7 @@ const Dashboard: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="symbol" tick={{ fill: '#5a5080', fontSize: 10 }} />
                 <YAxis tick={{ fill: '#5a5080', fontSize: 10 }} />
-                <Tooltip />
+                <Tooltip {...dashboardTooltipProps} />
                 <Bar dataKey="discount" fill="#7c3aed" radius={[6, 6, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
@@ -478,7 +502,7 @@ const Dashboard: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="symbol" tick={{ fill: '#5a5080', fontSize: 10 }} />
                 <YAxis tick={{ fill: '#5a5080', fontSize: 10 }} />
-                <Tooltip />
+                <Tooltip {...dashboardTooltipProps} />
                 <Bar dataKey="pnl" fill="#f0b429" radius={[6, 6, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>

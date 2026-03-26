@@ -174,8 +174,8 @@ const Register: React.FC = () => {
               </div>
 
               <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-4 text-sm text-amber-100">
-                <p className="font-semibold">⚠️ Important: If you choose Telegram recovery, you must first message @StockSphereBot on Telegram and press Start before registering.</p>
-                <p className="mt-2 text-amber-100/80">This allows the bot to send you password reset codes.</p>
+                <p className="font-semibold">⚠️ Important: If you choose Telegram recovery, register with the same Telegram username you use in Telegram, then send any message to @StockSphereBot.</p>
+                <p className="mt-2 text-amber-100/80">That lets the bot link your chat and deliver password reset codes later.</p>
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">

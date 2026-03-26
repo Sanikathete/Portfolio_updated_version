@@ -2,6 +2,7 @@ from django.test import TestCase
 from django.utils import timezone
 from django.contrib.auth.hashers import make_password
 from rest_framework.test import APIClient
+from unittest.mock import patch
 
 from datetime import timedelta
 
@@ -64,3 +65,45 @@ class PasswordRecoveryTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data['detail'], 'This reset token has expired.')
+
+    def test_telegram_webhook_links_chat_id_by_username(self):
+        user = User.objects.create_user(
+            username='telegramuser',
+            email='telegram@example.com',
+            password='ComplexPass123!',
+            telegram_username='stocksphere_user',
+            use_telegram_recovery=True,
+        )
+
+        response = self.client.post('/api/users/telegram/webhook/', {
+            'message': {
+                'chat': {'id': 987654321},
+                'from': {'username': 'stocksphere_user'},
+            }
+        }, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'linked')
+        user.refresh_from_db()
+        self.assertEqual(user.telegram_chat_id, '987654321')
+
+    @patch('users.views.requests.post')
+    def test_telegram_recovery_sends_reset_code_after_chat_is_linked(self, mock_post):
+        mock_post.return_value.status_code = 200
+        User.objects.create_user(
+            username='telegramreset',
+            email='telegramreset@example.com',
+            password='ComplexPass123!',
+            telegram_username='reset_user',
+            telegram_chat_id='123456789',
+            use_telegram_recovery=True,
+        )
+
+        response = self.client.post('/api/users/forgot-password/telegram/', {
+            'username': 'telegramreset',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['message'], 'Reset token sent to your Telegram')
+        self.assertTrue(PasswordResetToken.objects.filter(user__username='telegramreset').exists())
+        mock_post.assert_called_once()

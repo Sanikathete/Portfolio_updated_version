@@ -8,7 +8,9 @@ const Home: React.FC = () => {
   const [ticker, setTicker] = useState<any[]>([]);
 
   useEffect(() => {
-    axios.get('/api/stocks/?limit=20').then((response) => {
+    axios.get('/api/stocks/public-stocks/', {
+      params: { limit: 20, include_change: 1, refresh: 1 },
+    }).then((response) => {
       const data = response.data?.results || response.data || [];
       setTicker(Array.isArray(data) ? data : []);
     }).catch(() => {});

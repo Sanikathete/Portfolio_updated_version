@@ -7,7 +7,7 @@ import { SectionHeader } from '../components/SectionHeader';
 import { StatCard } from '../components/StatCard';
 import { usePortfolio } from '../context/PortfolioContext';
 import { useCurrency } from '../context/CurrencyContext';
-import { generateHistoricalSeries, generateForecastSeries, formatDate, seededNumber } from '../utils/forecastHelpers';
+import { generateHistoricalSeries, generateForecastSeries, formatDate, formatDateShort, seededNumber } from '../utils/forecastHelpers';
 import { getPrice } from '../utils/pageUtils';
 
 const MLAnalysis: React.FC = () => {
@@ -30,15 +30,16 @@ const MLAnalysis: React.FC = () => {
         const items = response.data?.items || response.data || [];
         const list = Array.isArray(items) ? items : [];
         setSymbols(list);
-        const hasCurrentSymbol = list.some((item: any) => (item.stock?.symbol || item.symbol) === selectedSymbol);
-        const nextSymbol = hasCurrentSymbol ? selectedSymbol : (list[0]?.stock?.symbol || list[0]?.symbol || '');
-        if (nextSymbol !== selectedSymbol) setSelectedSymbol(nextSymbol);
+        setSelectedSymbol((current) => {
+          const hasCurrentSymbol = list.some((item: any) => (item.stock?.symbol || item.symbol) === current);
+          return hasCurrentSymbol ? current : (list[0]?.stock?.symbol || list[0]?.symbol || '');
+        });
       } catch {
         toast.error('Cannot connect to server');
       }
     };
     void load();
-  }, [selectedPortfolioId, selectedSymbol]);
+  }, [selectedPortfolioId]);
 
   useEffect(() => {
     const selected = symbols.find((item) => (item.stock?.symbol || item.symbol) === selectedSymbol);
@@ -54,7 +55,7 @@ const MLAnalysis: React.FC = () => {
     const arimaFuture = generateForecastSeries({ days: 90, startPrice: currentPrice, seed: `${selectedSymbol}-arima`, bullish: true, volatility: 0.015 });
 
     const rows: any[] = historical.map((item) => ({
-      date: formatDate(item.date),
+      date: item.date,
       historical: item.price,
       linear: null,
       arima: null,
@@ -70,7 +71,7 @@ const MLAnalysis: React.FC = () => {
       if (index === 0) return;
       const arimaValue = arimaFuture[index]?.price ?? item.price;
       rows.push({
-        date: formatDate(item.date),
+        date: item.date,
         historical: null,
         linear: item.price,
         arima: arimaValue,
@@ -135,16 +136,43 @@ const MLAnalysis: React.FC = () => {
             </select>
             <div style={{ marginTop: 16 }}>
               <ResponsiveContainer width="100%" height={360}>
-                <LineChart data={forecastRows}>
+                <LineChart data={forecastRows} margin={{ top: 8, right: 8, left: 0, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="date" tick={{ fill: '#5a5080', fontSize: 10 }} interval="preserveStartEnd" minTickGap={60} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: '#7f73ae', fontSize: 11 }}
+                    tickFormatter={(value) => formatDateShort(value)}
+                    interval="preserveStartEnd"
+                    minTickGap={36}
+                    height={36}
+                  />
                   <YAxis tick={{ fill: '#5a5080', fontSize: 10 }} />
-                  <Tooltip />
+                  <Tooltip
+                    labelFormatter={(value) => formatDate(String(value))}
+                    contentStyle={{
+                      background: '#0f0b1f',
+                      border: '1px solid #2f245c',
+                      borderRadius: 10,
+                      color: '#f4f1ff',
+                      fontSize: 13,
+                    }}
+                    labelStyle={{
+                      color: '#f8f5ff',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      letterSpacing: '0.02em',
+                    }}
+                    itemStyle={{
+                      color: '#d9d2ff',
+                      fontSize: 13,
+                      fontWeight: 500,
+                    }}
+                  />
                   <Legend />
-                  <Line type="monotone" dataKey="historical" stroke="#1abc9c" dot={false} />
-                  <Line type="monotone" dataKey="linear" stroke="#2ecc71" strokeDasharray="5 5" dot={false} connectNulls />
-                  <Line type="monotone" dataKey="arima" stroke="#f39c12" strokeDasharray="5 5" dot={false} connectNulls />
-                  <Line type="monotone" dataKey="predicted" stroke="#a78bfa" strokeDasharray="5 5" dot={false} connectNulls />
+                  <Line type="monotone" dataKey="historical" stroke="#1abc9c" dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="linear" stroke="#2ecc71" strokeDasharray="5 5" dot={false} connectNulls isAnimationActive={false} />
+                  <Line type="monotone" dataKey="arima" stroke="#f39c12" strokeDasharray="5 5" dot={false} connectNulls isAnimationActive={false} />
+                  <Line type="monotone" dataKey="predicted" stroke="#a78bfa" strokeDasharray="5 5" dot={false} connectNulls isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .models import Watchlist, WatchlistItem
 from stocks.models import Stock
+from stocks.live_prices import sync_stock_prices
 
 
 class StockMiniSerializer(serializers.ModelSerializer):
@@ -46,6 +47,16 @@ class WatchlistDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Watchlist.objects.filter(user=self.request.user).prefetch_related("items__stock")
+
+    def retrieve(self, request, *args, **kwargs):
+        watchlist = self.get_object()
+        stock_ids = list(watchlist.items.values_list("stock_id", flat=True))
+        if stock_ids:
+            sync_stock_prices(queryset=Stock.objects.filter(id__in=stock_ids))
+            watchlist = self.get_queryset().get(pk=watchlist.pk)
+
+        serializer = self.get_serializer(watchlist)
+        return Response(serializer.data)
 
 
 @api_view(["POST"])
@@ -134,5 +145,9 @@ def get_watchlist_simple(request):
         return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
     watchlist, _ = Watchlist.objects.get_or_create(user=user, defaults={"name": "My Watchlist"})
+    stock_ids = list(watchlist.items.values_list("stock_id", flat=True))
+    if stock_ids:
+        sync_stock_prices(queryset=Stock.objects.filter(id__in=stock_ids))
+        watchlist = Watchlist.objects.prefetch_related("items__stock").get(pk=watchlist.pk)
     serializer = WatchlistSerializer(watchlist)
     return Response(serializer.data)

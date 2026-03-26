@@ -14,6 +14,13 @@ from .serializers import UserSerializer, RegisterSerializer
 load_dotenv()
 
 
+def is_valid_telegram_webhook(request):
+    expected_secret = os.getenv('TELEGRAM_WEBHOOK_SECRET')
+    if not expected_secret:
+        return True
+    return request.headers.get('X-Telegram-Bot-Api-Secret-Token') == expected_secret
+
+
 def send_telegram_reset_message(chat_id, token):
     telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
     if not telegram_bot_token:
@@ -40,7 +47,7 @@ class RegisterView(generics.CreateAPIView):
         response = super().create(request, *args, **kwargs)
         if response.status_code == status.HTTP_201_CREATED and request.data.get('use_telegram_recovery'):
             response.data['message'] = (
-                'Registration successful. Make sure you have started @StockSphereBot on Telegram so reset codes can be delivered.'
+                'Registration successful. Message @StockSphereBot from your registered Telegram username so reset codes can be delivered.'
             )
         return response
 
@@ -73,13 +80,51 @@ class ForgotPasswordTelegramView(APIView):
 
         if not user.telegram_chat_id:
             return Response(
-                {'detail': 'Telegram recovery is not fully configured for this account.'},
+                {
+                    'detail': (
+                        'Telegram recovery is not linked yet. '
+                        'Send a message to @StockSphereBot from your registered Telegram account, then try again.'
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         reset_token = PasswordResetToken.objects.create(user=user)
         send_telegram_reset_message(user.telegram_chat_id, reset_token.token)
         return Response({'message': 'Reset token sent to your Telegram'})
+
+
+class TelegramWebhookView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        if not is_valid_telegram_webhook(request):
+            return Response({'detail': 'Invalid Telegram webhook secret.'}, status=status.HTTP_403_FORBIDDEN)
+
+        message = request.data.get('message') or request.data.get('edited_message') or {}
+        sender = message.get('from') or {}
+        chat = message.get('chat') or {}
+        telegram_username = sender.get('username')
+        chat_id = chat.get('id')
+
+        if not telegram_username or not chat_id:
+            return Response({'status': 'ignored'}, status=status.HTTP_200_OK)
+
+        matched_users = User.objects.filter(
+            use_telegram_recovery=True,
+            telegram_username__iexact=telegram_username,
+        ).order_by('id')
+
+        if matched_users.count() != 1:
+            return Response({'status': 'ignored'}, status=status.HTTP_200_OK)
+
+        user = matched_users.first()
+        if user.telegram_chat_id != str(chat_id):
+            user.telegram_chat_id = str(chat_id)
+            user.telegram_username = telegram_username
+            user.save(update_fields=['telegram_chat_id', 'telegram_username', 'updated_at'])
+
+        return Response({'status': 'linked'}, status=status.HTTP_200_OK)
 
 
 class ForgotPasswordSecurityView(APIView):

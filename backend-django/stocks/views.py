@@ -12,27 +12,104 @@ from .live_prices import (
     sync_stock_prices,
 )
 
+
+def _parse_limit(raw_limit: str | None) -> int | None:
+    try:
+        limit = int(raw_limit) if raw_limit else None
+    except (TypeError, ValueError):
+        return None
+    return limit if limit and limit > 0 else None
+
+
+def _refresh_queryset_prices(queryset):
+    stock_ids = list(queryset.values_list("id", flat=True))
+    if stock_ids:
+        sync_stock_prices(queryset=Stock.objects.filter(id__in=stock_ids))
+
+
+def _safe_refresh_queryset_prices(queryset):
+    try:
+        _refresh_queryset_prices(queryset)
+        return True
+    except Exception:
+        return False
+
+
 class StockListView(generics.ListAPIView):
-    queryset = Stock.objects.all()
     serializer_class = StockSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        queryset = Stock.objects.all().order_by("symbol")
+        symbol = self.request.query_params.get("symbol")
+        if symbol:
+            queryset = queryset.filter(symbol__iexact=symbol)
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        if request.query_params.get("refresh") == "1" or stocks_need_refresh():
+            _safe_refresh_queryset_prices(queryset)
+            queryset = self.filter_queryset(self.get_queryset())
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
 class StockDetailView(generics.RetrieveAPIView):
-    queryset = Stock.objects.all()
     serializer_class = StockSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Stock.objects.all()
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if request.query_params.get("refresh") == "1" or stocks_need_refresh():
+            try:
+                sync_stock_prices(queryset=Stock.objects.filter(pk=instance.pk))
+                instance.refresh_from_db()
+            except Exception:
+                pass
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def public_stocks(request):
-    if request.query_params.get("refresh") == "1" or stocks_need_refresh():
-        sync_stock_prices()
+    limit = _parse_limit(request.query_params.get("limit"))
+    include_change = request.query_params.get("include_change") == "1"
 
-    stocks = Stock.objects.all().values(
+    queryset = Stock.objects.all().order_by("symbol")
+    if limit is not None:
+        queryset = queryset[:limit]
+
+    if request.query_params.get("refresh") == "1" or stocks_need_refresh():
+        _safe_refresh_queryset_prices(queryset)
+        queryset = Stock.objects.all().order_by("symbol")
+        if limit is not None:
+            queryset = queryset[:limit]
+
+    stocks = list(queryset.values(
         "id", "symbol", "name", "sector", "exchange",
         "current_price", "currency"
-    )
-    return Response(list(stocks))
+    ))
+
+    if include_change:
+        for stock in stocks:
+            try:
+                quote = get_live_stock_quote(stock["symbol"], stock["exchange"])
+            except Exception:
+                quote = {}
+            if not quote:
+                stock["change_percent"] = None
+                continue
+            stock["current_price"] = quote["price"]
+            stock["currency"] = quote["currency"]
+            stock["change_percent"] = quote["change_percent"]
+            stock["source"] = quote["source"]
+
+    return Response(stocks)
 
 
 @api_view(["GET"])

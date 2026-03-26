@@ -19,9 +19,11 @@ interface CurrencyCtx {
   currency: Currency;
   setCurrency: (currency: Currency) => void;
   convertPrice: (priceInINR: number) => number;
+  convertFromCurrency: (price: number, sourceCurrency?: string) => number;
   currencySymbol: string;
   convert: (priceInINR: number) => number;
   format: (priceInINR: number, decimals?: number) => string;
+  formatFromCurrency: (price: number, sourceCurrency?: string, decimals?: number) => string;
   symbol: string;
 }
 
@@ -37,11 +39,28 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('currency', nextCurrency);
   };
 
+  const normalizeCurrency = (value?: string): Currency => {
+    const upper = String(value || 'INR').toUpperCase();
+    return upper === 'USD' || upper === 'EUR' ? upper : 'INR';
+  };
+
   const convertPrice = (priceInINR: number) => priceInINR * RATES[currency];
+  const convertFromCurrency = (price: number, sourceCurrency = 'INR') => {
+    const source = normalizeCurrency(sourceCurrency);
+    const baseInINR = source === 'INR' ? price : price / RATES[source];
+    return convertPrice(baseInINR);
+  };
 
   const format = useMemo(() => {
     return (priceInINR: number, decimals = 2) => {
       const converted = convertPrice(priceInINR);
+      return `${SYMBOLS[currency]}${converted.toFixed(decimals)}`;
+    };
+  }, [currency]);
+
+  const formatFromCurrency = useMemo(() => {
+    return (price: number, sourceCurrency = 'INR', decimals = 2) => {
+      const converted = convertFromCurrency(price, sourceCurrency);
       return `${SYMBOLS[currency]}${converted.toFixed(decimals)}`;
     };
   }, [currency]);
@@ -51,12 +70,14 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
       currency,
       setCurrency,
       convertPrice,
+      convertFromCurrency,
       currencySymbol: SYMBOLS[currency],
       convert: convertPrice,
       format,
+      formatFromCurrency,
       symbol: SYMBOLS[currency],
     }),
-    [currency, format],
+    [currency, format, formatFromCurrency],
   );
 
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;
