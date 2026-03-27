@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'pgvector.django',
     'rest_framework',
     'corsheaders',
     'users',
@@ -123,6 +124,12 @@ REST_FRAMEWORK = {
 }
 
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_EMBED_MODEL = os.getenv('GEMINI_EMBED_MODEL', 'gemini-embedding-001')
+GEMINI_EMBED_DIM = int(os.getenv('GEMINI_EMBED_DIM', '768'))
+GEMINI_EMBED_MAX_RETRIES = int(os.getenv('GEMINI_EMBED_MAX_RETRIES', '5'))
+GEMINI_EMBED_RETRY_SLEEP = float(os.getenv('GEMINI_EMBED_RETRY_SLEEP', '5'))
+GEMINI_EMBED_THROTTLE_SECONDS = float(os.getenv('GEMINI_EMBED_THROTTLE_SECONDS', '0'))
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True

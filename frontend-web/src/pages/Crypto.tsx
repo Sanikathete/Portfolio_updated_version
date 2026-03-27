@@ -35,6 +35,8 @@ const Crypto: React.FC = () => {
     };
 
     void loadLivePrice();
+    const interval = window.setInterval(() => void loadLivePrice(), 60000);
+    return () => window.clearInterval(interval);
   }, []);
 
   const forecast = useMemo(() => {

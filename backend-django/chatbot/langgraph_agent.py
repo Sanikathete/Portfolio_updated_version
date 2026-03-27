@@ -1,6 +1,7 @@
 from langgraph.graph import StateGraph, END
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.tools import tool
 from typing import TypedDict, List
 from django.conf import settings
 
@@ -33,6 +34,21 @@ def general_agent(state):
     llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=settings.GROQ_API_KEY)
     response = llm.invoke([SystemMessage(content="You are a financial assistant."), HumanMessage(content=state["question"])])
     return {**state, "answer": response.content, "agent_type": "general_agent"}
+
+@tool
+def find_similar_stocks(query: str) -> str:
+    """Find stocks similar to the user's description using semantic search."""
+    from chatbot.embeddings import get_similar_stocks
+    results = get_similar_stocks(query, top_k=5)
+    if not results:
+        return "No similar stocks found."
+    lines = [f"Stocks similar to '{query}':"]
+    for r in results:
+        score = f"(similarity: {r['similarity']})" if r.get("similarity") is not None else ""
+        lines.append(f"  • {r['symbol']} — {r['name']} | {r.get('sector', '')} {score}".rstrip())
+    return "\n".join(lines)
+
+TOOLS = [find_similar_stocks]
 
 def create_agent_graph():
     workflow = StateGraph(AgentState)

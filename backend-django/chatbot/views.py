@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 
 from portfolio.models import PortfolioItem
 from watchlist.models import WatchlistItem
+from .embeddings import get_similar_stocks
 from .langgraph_agent import get_agent_answer
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
@@ -274,6 +275,19 @@ def get_stocks_by_sector(stocks: list, sector_keyword: str):
     ][:5]
 
 
+def format_price_with_currency(stock: dict) -> str:
+    price = stock.get("current_price")
+    currency = (stock.get("currency") or "").upper()
+    exchange = str(stock.get("exchange", "")).upper()
+    if currency:
+        return f"{currency}{price}"
+    if exchange == "NSE":
+        return f"Rs{price}"
+    if exchange in ("NYSE", "NASDAQ"):
+        return f"${price}"
+    return f"{price}"
+
+
 def pick_diverse_stocks(primary_stocks: list, fallback_stocks: list, limit: int = 4):
     selected = []
     seen_symbols = set()
@@ -334,23 +348,6 @@ def format_news_context(headlines: list[str], label: str = "Latest Market News")
         return f"{label}: Not available right now."
     numbered = "\n".join([f"{i + 1}. {h}" for i, h in enumerate(headlines)])
     return f"{label}:\n{numbered}"
-
-
-def get_similar_stocks(stocks: list, message: str, limit: int = 5):
-    query_words = [word.upper() for word in re.findall(r"[A-Za-z&]+", message) if len(word) > 2]
-    matches = []
-    seen = set()
-    for stock in stocks:
-        symbol = str(stock.get("symbol", "")).upper()
-        name = str(stock.get("name", "")).upper()
-        sector = str(stock.get("sector", "")).upper()
-        if any(word in symbol or word in name or word in sector for word in query_words):
-            if symbol and symbol not in seen:
-                matches.append(stock)
-                seen.add(symbol)
-        if len(matches) >= limit:
-            break
-    return matches or stocks[:limit]
 
 
 @api_view(["POST"])
@@ -428,7 +425,7 @@ Instructions:
                 "message": message,
                 "reply": reply,
             })
-        pgvector_results = get_similar_stocks(stocks, message)
+        pgvector_results = get_similar_stocks(message, top_k=5)
 
         msg_lower = message.lower()
         us_keywords = ["us stock", "us stocks", "us market", "american stock", "american stocks", "nyse", "nasdaq", "s&p", "dow jones", "wall street", "top nyse", "best nyse", "nyse stocks", "top nasdaq", "best nasdaq", "nasdaq stocks"]
@@ -583,17 +580,20 @@ Instructions:
 
             if not sector_stocks:
                 sector_stocks = pgvector_results[:5]
+
             sector_text = "\n".join([
-                f"- {s.get('symbol')} | {s.get('name')} | Rs{s.get('current_price')}"
+                f"- {s.get('symbol')} | {s.get('name')} | {format_price_with_currency(s)}"
                 for s in sector_stocks
             ]) or "No specific sector stocks found."
+            exchanges_in_list = {str(s.get("exchange", "")).upper() for s in sector_stocks if s}
+            market_scope = "India (NSE) and US (NYSE/NASDAQ)" if exchanges_in_list & {"NYSE", "NASDAQ"} and "NSE" in exchanges_in_list else "India (NSE)" if "NSE" in exchanges_in_list else "US (NYSE/NASDAQ)" if exchanges_in_list & {"NYSE", "NASDAQ"} else "available markets"
             prompt = f"""User asked: {message}
 
 Sector stocks from database:
 {sector_text}
 
 Instructions:
-- Explain the current outlook for this sector in India
+- Explain the current outlook for this sector for {market_scope}
 - Mention 2-3 stocks from the list as examples
 - Explain key factors affecting this sector
 - Add disclaimer about investment advice."""
@@ -838,7 +838,7 @@ def personal_chat(request):
         if question_type == "buy_advice" and not has_personal_terms(message):
             use_personal_context = False
 
-        pgvector_results = get_similar_stocks(stocks, message)
+        pgvector_results = get_similar_stocks(message, top_k=5)
 
         if question_type == "greeting":
             reply = "Hello! I'm StockSphere AI, your personal market assistant. How can I help you today?"
