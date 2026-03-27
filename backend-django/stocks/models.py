@@ -24,7 +24,9 @@ class Stock(models.Model):
         return " | ".join(p for p in parts if p)
 
     def save(self, *args, **kwargs):
-        if not self.embedding and getattr(settings, "GEMINI_API_KEY", None):
+        update_fields = kwargs.get("update_fields")
+        should_update_embedding = update_fields is None or "embedding" in update_fields
+        if self.embedding is None and should_update_embedding and getattr(settings, "GEMINI_API_KEY", None):
             from chatbot.embeddings import get_embedding
             self.embedding = get_embedding(self.embedding_text())
         super().save(*args, **kwargs)

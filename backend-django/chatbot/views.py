@@ -156,6 +156,123 @@ def format_recommended_stock(stock: dict) -> str:
     return f"{name} ({symbol}) at Rs{current_price:.2f} in {sector}"
 
 
+def resolve_symbol(name: str) -> str:
+    """
+    Dynamically resolve company name to stock symbol from DB.
+    Tries exact symbol match first, then searches by company name.
+    """
+    from stocks.models import Stock
+
+    name = name.strip()
+    if not name:
+        return ""
+
+    stock = Stock.objects.filter(symbol__iexact=name).first()
+    if stock:
+        return stock.symbol
+
+    stock = Stock.objects.filter(name__icontains=name).first()
+    if stock:
+        return stock.symbol
+
+    return name.upper()
+
+
+def stock_obj_to_dict(stock) -> dict:
+    return {
+        "symbol": stock.symbol,
+        "name": stock.name,
+        "sector": stock.sector,
+        "exchange": stock.exchange,
+        "current_price": stock.current_price,
+        "currency": getattr(stock, "currency", ""),
+    }
+
+
+def is_news_query(message: str) -> bool:
+    msg = message.lower()
+    return any(k in msg for k in ["news", "headline", "headlines", "latest news", "update", "updates"])
+
+
+def extract_stock_from_message_for_news(message: str):
+    from stocks.models import Stock
+
+    stopwords = {
+        "news", "latest", "on", "about", "tell", "me", "of", "for",
+        "stock", "stocks", "share", "shares"
+    }
+    for word in re.findall(r"[A-Za-z&]+", message):
+        if word.lower() in stopwords:
+            continue
+        symbol = resolve_symbol(word)
+        stock = Stock.objects.filter(symbol__iexact=symbol).first()
+        if stock:
+            return stock
+    return None
+
+
+def detect_recommendation_intent(query: str) -> str:
+    query = query.lower()
+    if any(w in query for w in ["short term", "short-term", "quick", "intraday"]):
+        return "short_term"
+    if any(w in query for w in ["long term", "long-term", "years", "future"]):
+        return "long_term"
+    if any(w in query for w in ["swing", "swing trading", "weekly", "monthly"]):
+        return "swing"
+    return "general"
+
+
+def get_recommendations_by_intent(intent: str, top_k: int = 5):
+    from stocks.models import Stock
+    from django.db.models import Q
+    import ast
+
+    all_sectors = list(
+        Stock.objects.values_list('sector', flat=True).distinct()
+    )
+    prompt = f"""
+    Available stock sectors in database: {all_sectors}
+
+    For a "{intent}" investment strategy, pick the 3 most suitable
+    sectors from the list above. Return ONLY a Python list of exact
+    sector names from the list. Nothing else.
+    Example: ["Nifty IT", "Nifty FMCG", "Nifty Pharma"]
+    """
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=100
+    )
+    try:
+        sectors = ast.literal_eval(
+            response.choices[0].message.content.strip()
+        )
+    except (ValueError, SyntaxError):
+        sectors = []
+
+    sector_filter = Q()
+    for s in sectors:
+        sector_filter |= Q(sector__iexact=s)
+
+    stocks = Stock.objects.filter(sector_filter)[:top_k] if sectors else []
+    return list(stocks), sectors
+
+
+def llm_pick_sector(user_query: str, sectors: list) -> str:
+    prompt = f"""
+    Given the user query: "{user_query}"
+    And these available stock sectors: {sectors}
+    Return ONLY the single most relevant sector name exactly
+    as it appears in the list. Return nothing else.
+    """
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=50
+    )
+    return response.choices[0].message.content.strip()
+
+
 def safe_float(value, default=0.0):
     try:
         if value in (None, ""):
@@ -266,13 +383,42 @@ def find_stock(stocks: list, query: str):
     return None
 
 
-def get_stocks_by_sector(stocks: list, sector_keyword: str):
-    keyword_lower = sector_keyword.lower()
-    return [
-        s for s in stocks
-        if keyword_lower in
-        str(s.get("sector", "")).lower()
-    ][:5]
+def get_stocks_by_sector(user_query: str, top_k: int = 5):
+    from stocks.models import Stock
+
+    all_sectors = Stock.objects.values_list(
+        'sector', flat=True
+    ).distinct()
+
+    query_lower = user_query.lower()
+    stopwords = {
+        "good", "best", "top", "stock", "stocks", "invest", "investment",
+        "buy", "to", "in", "the", "for", "and", "of", "a", "an"
+    }
+    query_tokens = [
+        w for w in re.findall(r"[a-z]+", query_lower)
+        if w not in stopwords and len(w) > 2
+    ]
+    matched_sector = None
+    for sector in all_sectors:
+        if sector and any(
+            word in sector.lower()
+            for word in query_tokens
+        ):
+            matched_sector = sector
+            break
+
+    if not matched_sector:
+        sectors_list = list(all_sectors)
+        matched_sector = llm_pick_sector(user_query, sectors_list)
+
+    if matched_sector:
+        stocks = Stock.objects.filter(
+            sector__iexact=matched_sector
+        )[:top_k]
+        return list(stocks), matched_sector
+
+    return None, None
 
 
 def format_price_with_currency(stock: dict) -> str:
@@ -375,6 +521,10 @@ def public_chat(request):
             found_stock = None
         else:
             found_stock = find_stock(stocks, message) or find_stock_in_db(message)
+        if not found_stock and is_news_query(message):
+            news_stock = extract_stock_from_message_for_news(message)
+            if news_stock:
+                found_stock = stock_obj_to_dict(news_stock)
         use_personal_context = True
         if question_type == "buy_advice" and not has_personal_terms(message):
             use_personal_context = False
@@ -439,12 +589,35 @@ Instructions:
         live_price_ctx = ""
         stock_news_ctx = ""
 
+        stock_news_list = []
         if found_stock:
-            symbol = found_stock.get("symbol", "")
+            symbol = resolve_symbol(found_stock.get("symbol", ""))
             live_price_ctx = build_live_price_context(symbol, found_stock.get("current_price"))
+            stock_news_list = get_stock_news(symbol)
             stock_news_ctx = format_news_context(
-                get_stock_news(symbol), label=f"Latest News for {symbol}"
+                stock_news_list, label=f"Latest News for {symbol}"
             )
+            if is_news_query(message) and not stock_news_list:
+                live = get_live_price(symbol)
+                live_price = live.get("live_price") if live else "N/A"
+                high_52w = live.get("52w_high") if live else "N/A"
+                low_52w = live.get("52w_low") if live else "N/A"
+                reply = (
+                    f"Live news for {found_stock.get('name', symbol)} is not available right now.\n\n"
+                    f"Here are the latest price details for {symbol}:\n"
+                    f"• Live Price: Rs{live_price}\n"
+                    f"• 52-Week High: Rs{high_52w}\n"
+                    f"• 52-Week Low: Rs{low_52w}\n\n"
+                    "For the latest news visit moneycontrol.com or nseindia.com.\n\n"
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+                return Response({
+                    "mode": "public",
+                    "message": message,
+                    "question_type": "news",
+                    "stock_found": True,
+                    "reply": reply,
+                })
 
         if found_stock:
             stock_context = f"""
@@ -475,10 +648,15 @@ Instructions:
         elif question_type == "price_query":
             words = [w.upper() for w in message.split() if w.isalpha() and len(w) > 2]
             live_results = []
+            seen = set()
             for w in words:
-                live = get_live_price(w)
+                sym = resolve_symbol(w)
+                if not sym or sym in seen:
+                    continue
+                seen.add(sym)
+                live = get_live_price(sym)
                 if live:
-                    live_results.append(f"{w}: Rs{live['live_price']} (52W H: Rs{live['52w_high']} | L: Rs{live['52w_low']})")
+                    live_results.append(f"{sym}: Rs{live['live_price']} (52W H: Rs{live['52w_high']} | L: Rs{live['52w_low']})")
 
             live_text = "\n".join(live_results) if live_results else "Could not fetch live price for the requested stock."
             prompt = f"""User asked: {message}
@@ -519,9 +697,23 @@ Instructions:
 - Keep it short, friendly, and helpful
 - Add disclaimer: This is not financial advice."""
         elif question_type == "buy_advice":
-            sample_stocks = pick_diverse_stocks(pgvector_results, stocks, limit=4)
+            intent = detect_recommendation_intent(message)
+            rec_stocks, _ = get_recommendations_by_intent(intent, top_k=5)
+            sample_stocks = rec_stocks[:4]
+            if not sample_stocks:
+                reply = (
+                    "No stocks from this sector are currently available in StockSphere. "
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+                return Response({
+                    "mode": "public",
+                    "message": message,
+                    "question_type": "buy_advice",
+                    "stock_found": False,
+                    "reply": reply,
+                })
             sample_text = "\n".join([
-                f"- {s.get('symbol')} | {s.get('name')} | Rs{s.get('current_price')} | {s.get('sector')} | {s.get('exchange', 'NSE')}"
+                f"- {s.symbol} | {s.name} | Rs{s.current_price} | {s.sector} | {s.exchange}"
                 for s in sample_stocks
             ])
             prompt = f"""User asked: {message}
@@ -535,57 +727,25 @@ Instructions:
 - Mention StockSphere has NSE stocks to explore
 - Always add: This is not financial advice. Do your own research and consult a SEBI-registered advisor."""
         elif question_type == "sector_query":
-            sector_map = {
-                "it": "Nifty IT",
-                "tech": "Nifty IT",
-                "technology": "Nifty IT",
-                "software": "Nifty IT",
-                "metal": "Nifty Metal",
-                "steel": "Nifty Metal",
-                "energy": "Nifty Energy",
-                "power": "Nifty Energy",
-                "bank": "Nifty Bank",
-                "banking": "Nifty Bank",
-                "pharma": "Nifty Pharma",
-                "pharmaceutical": "Nifty Pharma",
-                "auto": "Nifty Auto",
-                "automobile": "Nifty Auto",
-                "fmcg": "Nifty FMCG",
-                "media": "Nifty Media",
-                "realty": "Nifty Realty",
-                "real estate": "Nifty Realty",
-                "financials": "Financials",
-                "finance": "Financials",
-                "healthcare": "Healthcare",
-                "consumer": "Consumer",
-            }
-            matched_sector = next(
-                (full for key, full in sector_map.items()
-                 if key in msg_lower),
-                None
-            )
-            sector_stocks = get_stocks_by_sector(
-                stocks, matched_sector or message
-            ) if matched_sector else pgvector_results[:5]
-
+            sector_stocks, matched_sector = get_stocks_by_sector(message, top_k=5)
             if not sector_stocks:
-                sector_stocks = [
-                    s for s in stocks
-                    if any(
-                        word in str(s.get("sector", "")).lower()
-                        for word in msg_lower.split()
-                        if len(word) > 2
-                    )
-                ][:5]
-
-            if not sector_stocks:
-                sector_stocks = pgvector_results[:5]
+                reply = (
+                    "No stocks from this sector are currently available in StockSphere. "
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+                return Response({
+                    "mode": "public",
+                    "message": message,
+                    "question_type": "sector_query",
+                    "stock_found": False,
+                    "reply": reply,
+                })
 
             sector_text = "\n".join([
-                f"- {s.get('symbol')} | {s.get('name')} | {format_price_with_currency(s)}"
+                f"- {s.symbol} | {s.name} | {format_price_with_currency(stock_obj_to_dict(s))}"
                 for s in sector_stocks
             ]) or "No specific sector stocks found."
-            exchanges_in_list = {str(s.get("exchange", "")).upper() for s in sector_stocks if s}
+            exchanges_in_list = {str(s.exchange).upper() for s in sector_stocks if s}
             market_scope = "India (NSE) and US (NYSE/NASDAQ)" if exchanges_in_list & {"NYSE", "NASDAQ"} and "NSE" in exchanges_in_list else "India (NSE)" if "NSE" in exchanges_in_list else "US (NYSE/NASDAQ)" if exchanges_in_list & {"NYSE", "NASDAQ"} else "available markets"
             prompt = f"""User asked: {message}
 
@@ -632,13 +792,19 @@ Instructions:
                 "WHAT", "HOW", "ARE", "STOCK", "STOCKS", "INDIA"
             }
             symbols_in_msg = [
-                w.upper() for w in message.split()
+                resolve_symbol(w) for w in message.split()
                 if w.isalpha() and len(w) > 2
                 and w.upper() not in stopwords
             ]
             live_compare = []
             unavailable_symbols = []
-            for sym in symbols_in_msg[:2]:
+            seen = set()
+            for sym in symbols_in_msg:
+                if not sym or sym in seen:
+                    continue
+                seen.add(sym)
+                if len(seen) > 2:
+                    break
                 live = get_live_price(sym)
                 if live and live.get("live_price"):
                     live_compare.append(
@@ -678,9 +844,23 @@ Instructions:
 - Only compare stocks where live data was fetched above
 - Add disclaimer: This is not financial advice."""
         elif question_type == "longterm_advice":
-            sample_stocks = pgvector_results if pgvector_results else stocks[:20]
+            intent = detect_recommendation_intent(message)
+            rec_stocks, _ = get_recommendations_by_intent(intent, top_k=5)
+            sample_stocks = rec_stocks if rec_stocks else []
+            if not sample_stocks:
+                reply = (
+                    "No stocks from this sector are currently available in StockSphere. "
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+                return Response({
+                    "mode": "public",
+                    "message": message,
+                    "question_type": "longterm_advice",
+                    "stock_found": False,
+                    "reply": reply,
+                })
             sample_text = "\n".join([
-                f"- {s.get('symbol')} | {s.get('name')} | {'Rs' if str(s.get('exchange', '')).upper() == 'NSE' else '$'}{s.get('current_price')} | {s.get('sector')} | {s.get('exchange', 'NSE')}"
+                f"- {s.symbol} | {s.name} | {'Rs' if str(s.exchange).upper() == 'NSE' else '$'}{s.current_price} | {s.sector} | {s.exchange}"
                 for s in sample_stocks
             ])
             prompt = f"""User asked: {message}
@@ -695,9 +875,23 @@ Instructions:
 - Mention benefits of SIP and portfolio diversification
 - Add disclaimer: This is not financial advice."""
         elif question_type == "shortterm_advice":
-            sample_stocks = pgvector_results if pgvector_results else stocks[:20]
+            intent = detect_recommendation_intent(message)
+            rec_stocks, _ = get_recommendations_by_intent(intent, top_k=5)
+            sample_stocks = rec_stocks if rec_stocks else []
+            if not sample_stocks:
+                reply = (
+                    "No stocks from this sector are currently available in StockSphere. "
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+                return Response({
+                    "mode": "public",
+                    "message": message,
+                    "question_type": "shortterm_advice",
+                    "stock_found": False,
+                    "reply": reply,
+                })
             sample_text = "\n".join([
-                f"- {s.get('symbol')} | {s.get('name')} | {'Rs' if str(s.get('exchange', '')).upper() == 'NSE' else '$'}{s.get('current_price')} | {s.get('sector')} | {s.get('exchange', 'NSE')}"
+                f"- {s.symbol} | {s.name} | {'Rs' if str(s.exchange).upper() == 'NSE' else '$'}{s.current_price} | {s.sector} | {s.exchange}"
                 for s in sample_stocks
             ])
             prompt = f"""User asked: {message}
@@ -890,55 +1084,22 @@ Instructions:
             })
 
         if question_type == "sector_query":
-            msg_lower = message.lower()
-            sector_map = {
-                "it": "Nifty IT",
-                "tech": "Nifty IT",
-                "technology": "Nifty IT",
-                "software": "Nifty IT",
-                "metal": "Nifty Metal",
-                "steel": "Nifty Metal",
-                "energy": "Nifty Energy",
-                "power": "Nifty Energy",
-                "bank": "Nifty Bank",
-                "banking": "Nifty Bank",
-                "pharma": "Nifty Pharma",
-                "pharmaceutical": "Nifty Pharma",
-                "auto": "Nifty Auto",
-                "automobile": "Nifty Auto",
-                "fmcg": "Nifty FMCG",
-                "media": "Nifty Media",
-                "realty": "Nifty Realty",
-                "real estate": "Nifty Realty",
-                "financials": "Financials",
-                "finance": "Financials",
-                "healthcare": "Healthcare",
-                "consumer": "Consumer",
-            }
-            matched_sector = next(
-                (full for key, full in sector_map.items()
-                 if key in msg_lower),
-                None
-            )
-            sector_stocks = get_stocks_by_sector(
-                stocks, matched_sector or message
-            ) if matched_sector else []
-
+            sector_stocks, matched_sector = get_stocks_by_sector(message, top_k=5)
             if not sector_stocks:
-                sector_stocks = [
-                    s for s in stocks
-                    if any(
-                        word in str(s.get("sector", "")).lower()
-                        for word in msg_lower.split()
-                        if len(word) > 2
-                    )
-                ][:5]
-
-            if not sector_stocks:
-                sector_stocks = pgvector_results[:5]
+                reply = (
+                    "No stocks from this sector are currently available in StockSphere. "
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+                return Response({
+                    "mode": "personal",
+                    "message": message,
+                    "question_type": "sector_query",
+                    "stock_found": False,
+                    "reply": reply,
+                })
 
             sector_text = "\n".join([
-                f"- {s.get('symbol')} | {s.get('name')} | Rs{s.get('current_price')}"
+                f"- {s.symbol} | {s.name} | Rs{s.current_price}"
                 for s in sector_stocks
             ]) or "No specific sector stocks found."
             prompt = f"""User asked: {message}
@@ -1091,10 +1252,43 @@ Instructions:
                 if len(recommended_stocks) >= 5:
                     break
 
+        recommendation_intent = detect_recommendation_intent(message)
+        if question_type in ("buy_advice", "longterm_advice", "shortterm_advice") or recommendation_intent in ("short_term", "long_term", "swing"):
+            rec_stocks, _ = get_recommendations_by_intent(recommendation_intent, top_k=5)
+            if rec_stocks:
+                recommended_stocks = [stock_obj_to_dict(s) for s in rec_stocks]
+
         if found_stock is not None:
-            symbol = found_stock.get("symbol", "")
+            symbol = resolve_symbol(found_stock.get("symbol", ""))
             live_price_ctx = build_live_price_context(symbol, found_stock.get("current_price"))
-            stock_news_ctx = format_news_context(get_stock_news(symbol), label=f"Latest News for {symbol}")
+            stock_news_list = get_stock_news(symbol)
+            stock_news_ctx = format_news_context(stock_news_list, label=f"Latest News for {symbol}")
+            if is_news_query(message) and not stock_news_list:
+                live = get_live_price(symbol)
+                live_price = live.get("live_price") if live else "N/A"
+                high_52w = live.get("52w_high") if live else "N/A"
+                low_52w = live.get("52w_low") if live else "N/A"
+                reply = (
+                    f"Live news for {found_stock.get('name', symbol)} is not available right now.\n\n"
+                    f"Here are the latest price details for {symbol}:\n"
+                    f"• Live Price: Rs{live_price}\n"
+                    f"• 52-Week High: Rs{high_52w}\n"
+                    f"• 52-Week Low: Rs{low_52w}\n\n"
+                    "For the latest news visit moneycontrol.com or nseindia.com.\n\n"
+                    "This is not financial advice. Please consult a SEBI-registered advisor."
+                )
+                return Response({
+                    "mode": "personal",
+                    "message": message,
+                    "reply": reply,
+                    "portfolio_stats": {
+                        "best_performing": best_performing,
+                        "most_profitable": most_profitable,
+                        "highest_price_stock": highest_price_stock,
+                        "lowest_price_stock": lowest_price_stock,
+                    },
+                    "recommendations": recommended_stocks,
+                })
         else:
             live_price_ctx = ""
             stock_news_ctx = ""
@@ -1243,13 +1437,19 @@ Instructions:
                 "WHAT", "HOW", "ARE", "STOCK", "STOCKS", "INDIA"
             }
             symbols_in_msg = [
-                w.upper() for w in message.split()
+                resolve_symbol(w) for w in message.split()
                 if w.isalpha() and len(w) > 2
                 and w.upper() not in stopwords
             ]
             live_compare = []
             unavailable_symbols = []
-            for sym in symbols_in_msg[:2]:
+            seen = set()
+            for sym in symbols_in_msg:
+                if not sym or sym in seen:
+                    continue
+                seen.add(sym)
+                if len(seen) > 2:
+                    break
                 live = get_live_price(sym)
                 if live and live.get("live_price"):
                     live_compare.append(
