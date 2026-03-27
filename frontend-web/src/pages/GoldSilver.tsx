@@ -42,6 +42,12 @@ const GoldSilver: React.FC = () => {
   const unitLabel = unit === 'kg' ? 'per kg' : 'per gram';
   const displayGoldPrice = goldPrice * unitFactor;
   const displaySilverPrice = silverPrice * unitFactor;
+  const axisTickStyle = {
+    fill: '#b8b1d6',
+    fontSize: 11,
+    fontWeight: 600,
+    fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif',
+  };
 
   const marketData = useMemo(() => {
     const random = seededNumber(`gold-silver-${range}`);
@@ -116,8 +122,8 @@ const GoldSilver: React.FC = () => {
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={marketData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fill: '#5a5080', fontSize: 10 }} />
-                <YAxis tick={{ fill: '#5a5080', fontSize: 10 }} />
+                <XAxis dataKey="date" tick={axisTickStyle} minTickGap={18} tickMargin={8} interval="preserveStartEnd" />
+                <YAxis tick={{ fill: '#857bb0', fontSize: 10, fontWeight: 600 }} />
                 <Tooltip />
                 <Area type="monotone" dataKey="gold" stroke="#f0b429" fill="rgba(240,180,41,0.2)" />
                 <Area type="monotone" dataKey="silver" stroke="#1abc9c" fill="rgba(26,188,156,0.2)" />
@@ -130,8 +136,8 @@ const GoldSilver: React.FC = () => {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={marketData.slice(-120)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fill: '#5a5080', fontSize: 10 }} />
-                <YAxis tick={{ fill: '#5a5080', fontSize: 10 }} />
+                <XAxis dataKey="date" tick={axisTickStyle} minTickGap={18} tickMargin={8} interval="preserveStartEnd" />
+                <YAxis tick={{ fill: '#857bb0', fontSize: 10, fontWeight: 600 }} />
                 <Tooltip />
                 <Bar dataKey="gap">
                   {marketData.slice(-120).map((item, index) => <Cell key={`${item.date}-${index}`} fill={item.gap >= 0 ? '#2ecc71' : '#e74c3c'} />)}
