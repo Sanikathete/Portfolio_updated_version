@@ -27,6 +27,7 @@ frozenlist==1.8.0
 greenlet==3.3.2
 groq==0.37.1
 google-genai
+google-api-core==2.19.0
 h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1

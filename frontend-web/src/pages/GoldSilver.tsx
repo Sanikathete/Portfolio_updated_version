@@ -51,7 +51,12 @@ const GoldSilver: React.FC = () => {
 
   const marketData = useMemo(() => {
     const random = seededNumber(`gold-silver-${range}`);
-    const days = range === '1Y' ? 365 : range === '2Y' ? 730 : 1095;
+    const days = range === '1M' ? 30
+      : range === '3M' ? 90
+      : range === '6M' ? 180
+      : range === '1Y' ? 365
+      : range === '2Y' ? 730
+      : 1095;
     const baseGold = goldPrice * unitFactor;
     const baseSilver = silverPrice * unitFactor;
     let gold = baseGold * 0.72;
@@ -103,7 +108,14 @@ const GoldSilver: React.FC = () => {
       <SectionHeader label="Precious Metals" title="Gold and Silver" description="Three-year metal curves, return gap, connected forecasts, and a correlation view." />
       <div style={{ display: 'grid', gap: 16 }}>
         <div style={{ display: 'flex', gap: 12 }}>
-          <select className="select-field" value={range} onChange={(event) => setRange(event.target.value)}><option>1Y</option><option>2Y</option><option>3Y</option></select>
+          <select className="select-field" value={range} onChange={(event) => setRange(event.target.value)}>
+            <option>1M</option>
+            <option>3M</option>
+            <option>6M</option>
+            <option>1Y</option>
+            <option>2Y</option>
+            <option>3Y</option>
+          </select>
           <select className="select-field" value={unit} onChange={(event) => setUnit(event.target.value as 'gram' | 'kg')}>
             <option value="gram">Per gram</option>
             <option value="kg">Per kg</option>

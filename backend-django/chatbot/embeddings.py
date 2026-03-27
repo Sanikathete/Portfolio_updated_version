@@ -8,7 +8,12 @@ from google.genai import types
 import numpy as np
 from django.conf import settings
 from pgvector.django import CosineDistance
-from google.api_core.exceptions import ResourceExhausted
+try:
+    from google.api_core.exceptions import ResourceExhausted
+except Exception:  # pragma: no cover - optional dependency for CI safety
+    class ResourceExhausted(Exception):
+        """Fallback when google.api_core is unavailable."""
+        pass
 
 logger = logging.getLogger(__name__)
 
