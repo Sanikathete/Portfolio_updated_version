@@ -33,3 +33,25 @@ class Stock(models.Model):
 
     def __str__(self):
         return f"{self.symbol} - {self.name}"
+
+
+class QualityStock(models.Model):
+    symbol = models.CharField(max_length=20)
+    company_name = models.CharField(max_length=150)
+    pe_ratio = models.FloatField(null=True, blank=True)
+    discount_from_52w_high = models.FloatField(null=True, blank=True)
+    sentiment_score = models.FloatField(null=True, blank=True)
+    sentiment_label = models.CharField(max_length=20, default='Neutral')
+    eps = models.FloatField(null=True, blank=True)
+    debt_to_equity = models.FloatField(null=True, blank=True)
+    revenue_growth = models.FloatField(null=True, blank=True)
+    quality_score = models.FloatField(default=0)
+    rank = models.IntegerField(default=0)
+    date = models.DateField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['rank']
+        unique_together = ('symbol', 'date')
+
+    def __str__(self):
+        return f"{self.symbol} ({self.date})"

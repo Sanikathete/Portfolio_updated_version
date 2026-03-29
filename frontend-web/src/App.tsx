@@ -16,6 +16,7 @@ const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Stocks = React.lazy(() => import('./pages/Stocks'));
 const StockDetail = React.lazy(() => import('./pages/StockDetail'));
 const Portfolio = React.lazy(() => import('./pages/Portfolio'));
+const QualityCheck = React.lazy(() => import('./pages/QualityCheck'));
 const RecommendStocks = React.lazy(() => import('./pages/RecommendStocks'));
 const Watchlist = React.lazy(() => import('./pages/Watchlist'));
 const Growth = React.lazy(() => import('./pages/Growth'));
@@ -52,6 +53,7 @@ export default function App() {
                 <Route path="/stocks" element={<ProtectedRoute><Stocks /></ProtectedRoute>} />
                 <Route path="/stocks/:symbol" element={<ProtectedRoute><StockDetail /></ProtectedRoute>} />
                 <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
+                <Route path="/quality-check" element={<ProtectedRoute><QualityCheck /></ProtectedRoute>} />
                 <Route path="/portfolio/recommend" element={<ProtectedRoute><RecommendStocks /></ProtectedRoute>} />
                 <Route path="/portfolio/stock/:symbol" element={<ProtectedRoute><StockDetail mode="portfolio" /></ProtectedRoute>} />
                 <Route path="/watchlist" element={<ProtectedRoute><Watchlist /></ProtectedRoute>} />

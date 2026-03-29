@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axios from '../api/axios';
 import { PageLayout } from '../components/PageLayout';
@@ -12,6 +13,7 @@ import { seededNumber } from '../utils/forecastHelpers';
 const Portfolio: React.FC = () => {
   const { selectedPortfolioId } = usePortfolio();
   const [rows, setRows] = useState<any[]>([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const load = async () => {
@@ -52,7 +54,32 @@ const Portfolio: React.FC = () => {
 
   return (
     <PageLayout title="Portfolio">
-      <SectionHeader label="Portfolio Intelligence" title="Portfolio" description="Forecast and five-year performance values are seeded from the selected portfolio so they stay stable across refreshes." />
+      <SectionHeader
+        label="Portfolio Intelligence"
+        title="Portfolio"
+        description="Forecast and five-year performance values are seeded from the selected portfolio so they stay stable across refreshes."
+        action={(
+          <button
+            className="btn btn-primary"
+            style={{
+              fontSize: 12,
+              padding: '6px 14px',
+              background: 'linear-gradient(135deg, var(--purple), var(--accent-gold))',
+              border: 'none',
+              borderRadius: 8,
+              color: '#fff',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+            onClick={() => navigate('/quality-check')}
+          >
+            ✅ Quality Check
+          </button>
+        )}
+      />
       <div className="glass-card" style={{ padding: 18 }}>
         <div className="table-wrap">
           <table className="data-table">

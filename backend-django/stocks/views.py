@@ -2,8 +2,10 @@ from rest_framework import generics, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from .models import Stock
-from .serializers import StockSerializer
+from django.utils import timezone
+from .models import Stock, QualityStock
+from .serializers import StockSerializer, QualityStockSerializer
+from .quality_pipeline import run_pipeline
 from .live_prices import (
     get_live_btc_price_in_inr,
     get_live_metals_in_inr,
@@ -146,3 +148,25 @@ def live_metals_quote(request):
     if not quote:
         return Response({"error": "Unable to fetch live metal prices"}, status=502)
     return Response(quote)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def quality_stocks_top3(request):
+    today = timezone.localdate()
+    queryset = QualityStock.objects.filter(date=today).order_by("rank")
+
+    if not queryset.exists():
+        run_pipeline()
+        queryset = QualityStock.objects.filter(date=today).order_by("rank")
+
+    serializer = QualityStockSerializer(queryset[:3], many=True)
+    return Response(serializer.data)
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def quality_stocks_refresh(request):
+    result = run_pipeline()
+    count = len(result.get("filtered_stocks", []) or [])
+    return Response({"status": "success", "stocks_processed": count})

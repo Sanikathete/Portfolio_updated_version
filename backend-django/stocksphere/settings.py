@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'portfolio',
     'watchlist',
     'django_celery_beat',
+    'django_crontab',
     'chatbot',
     'news',
 ]
@@ -134,3 +135,7 @@ GEMINI_EMBED_THROTTLE_SECONDS = float(os.getenv('GEMINI_EMBED_THROTTLE_SECONDS',
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+CRONJOBS = [
+    ('15 3 * * *', 'stocks.cron.run_daily_quality_pipeline'),
+]

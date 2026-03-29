@@ -10,3 +10,5 @@ node_modules/
 *.sqlite3
 __pycache__/
 *.pyc
+backend-django/stocks/__pycache__/
+backend-django/stocksphere/__pycache__/
